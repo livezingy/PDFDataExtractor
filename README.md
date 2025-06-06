@@ -3,6 +3,51 @@
 ## Overview
 PDFDataExtractor is a robust, extensible pipeline for extracting tables and structured data from PDF documents. It is designed to handle a wide variety of PDF types, including text-based, image-based, and hybrid documents. The system integrates multiple table detection and extraction strategies (Camelot and deep learning-based table-transformer), and provides dynamic parameter optimization to maximize extraction accuracy. The project features a modern GUI built with PySide6, supporting batch processing, parameter customization, and visual preview of extraction results.
 
+## Environment Setup
+
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Project Structure
+The project should have the following directory structure:
+```
+PDFDataExtractor/
+├── main.py
+├── models/
+│   ├── Tesseract-OCR/
+│   │   ├── tesseract.exe
+│   │   └── tessdata/
+│   └── table-transformer/
+│       ├── detection/
+│       ├── structure/
+│       └── ocr/
+└── requirements.txt
+```
+
+### 3. Model Files Configuration
+The project requires the following model files to be placed in the correct directories:
+
+#### Tesseract-OCR
+- Windows: Place the Tesseract-OCR folder in the `models/Tesseract-OCR` directory
+  - Ensure it contains `tesseract.exe` and the `tessdata` folder
+- Linux: Ensure Tesseract-OCR is installed on the system, default path is `/usr/share/tesseract-ocr/tessdata`
+
+#### Table-Transformer Models
+The following three subdirectories are required under `models/table-transformer`:
+- `detection/`: Table detection model
+  - Download from: [microsoft/table-transformer-detection](https://huggingface.co/microsoft/table-transformer-detection)
+- `structure/`: Table structure recognition model
+  - Download from: [microsoft/table-transformer-structure-recognition](https://huggingface.co/microsoft/table-transformer-structure-recognition)
+- `ocr/`: Text recognition model (Currently not used in the codebase, will be added in future updates)
+  - Download from: [microsoft/table-transformer-ocr](https://huggingface.co/microsoft/table-transformer-ocr)
+
+### 4. Run the Application
+```bash
+python main.py
+```
+
 ## Core Processing Logic
 
 ### Table Detection and Extraction Workflow
@@ -88,6 +133,18 @@ In the parameters panel, select:
 - For best results, use high-quality, non-encrypted PDFs
 - The system is designed for extensibility; you can add new detection/extraction modules or customize parameter optimization as needed
 - All output files are organized per PDF for easy management
+
+
+## Future Plans
+1. **Camelot Parameter Optimization**
+   - Enhance automatic parameter tuning for Camelot table extraction
+   - Implement machine learning-based parameter optimization
+   - Add more sophisticated table structure analysis
+
+2. **OCR Model Integration**
+   - Integrate the Table-Transformer OCR model
+   - Add support for more OCR engines (e.g., EasyOCR, PaddleOCR)
+   - Implement OCR model selection based on document characteristics
 
 ## More Information
 For further details, refer to the code documentation and comments within each module.
