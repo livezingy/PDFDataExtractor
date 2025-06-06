@@ -1,0 +1,156 @@
+/* 进度条样式 */
+QProgressBar {
+    border: 1px solid #CCCCCC;
+    border-radius: 3px;
+    text-align: center;
+    background: #FFFFFF;
+    height: 20px;
+}
+
+QProgressBar::chunk {
+    background-color: #0078D7;
+    width: 10px;
+}
+
+/* 日志窗口样式 */
+QTextEdit#log_view {
+    background-color: #FFFFFF;
+    border: 1px solid #CCCCCC;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+    color: #333333;
+}
+
+/* 按钮样式 */
+QPushButton {
+    background-color: #F0F0F0;
+    color: #000000;
+    border: 1px solid #CCCCCC;
+    padding: 5px 15px;
+    border-radius: 3px;
+    min-height: 25px;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+}
+
+QPushButton:hover {
+    background-color: #E5F3FF;
+    border-color: #0078D7;
+}
+
+QPushButton:pressed {
+    background-color: #CCE8FF;
+    border-color: #0078D7;
+}
+
+QPushButton:disabled {
+    background-color: #F5F5F5;
+    color: #999999;
+    border-color: #CCCCCC;
+}
+
+/* 面板样式 */
+QWidget {
+    background-color: #FFFFFF;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+}
+
+/* 文件列表样式 */
+QListWidget {
+    border: 1px solid #CCCCCC;
+    border-radius: 3px;
+    padding: 2px;
+    background-color: #FFFFFF;
+}
+
+QListWidget::item {
+    padding: 5px;
+    border-bottom: 1px solid #F0F0F0;
+}
+
+QListWidget::item:selected {
+    background-color: #E5F3FF;
+    color: #000000;
+}
+
+/* 参数面板样式 */
+QGroupBox {
+    border: 1px solid #CCCCCC;
+    border-radius: 3px;
+    margin-top: 15px;
+    padding-top: 20px;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    color: #333333;
+}
+
+/* 标签样式 */
+QLabel {
+    color: #333333;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+}
+
+/* 输入框样式 */
+QLineEdit, QSpinBox, QComboBox {
+    border: 1px solid #CCCCCC;
+    border-radius: 3px;
+    padding: 3px;
+    background: #FFFFFF;
+    min-height: 20px;
+    font-family: "Segoe UI";
+    font-size: 9pt;
+}
+
+QLineEdit:focus, QSpinBox:focus, QComboBox:focus {
+    border-color: #0078D7;
+}
+
+/* 滚动条样式 */
+QScrollBar:vertical {
+    border: none;
+    background: #F0F0F0;
+    width: 12px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: #CCCCCC;
+    min-height: 20px;
+    border-radius: 6px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #999999;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* 特殊按钮样式 */
+QPushButton#btnStart {
+    background-color: #0078D7;
+    color: #FFFFFF;
+    border: none;
+    font-weight: bold;
+}
+
+QPushButton#btnStart:hover {
+    background-color: #106EBE;
+}
+
+QPushButton#btnStart:pressed {
+    background-color: #005A9E;
+}
+
+QPushButton#btnStart:disabled {
+    background-color: #CCCCCC;
+    color: #FFFFFF;
+}

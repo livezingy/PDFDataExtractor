@@ -1,0 +1,40 @@
+# 操作系统文件
+.DS_Store             # macOS
+Thumbs.db             # Windows
+desktop.ini
+
+# IDE配置文件
+.idea/                # JetBrains (IntelliJ, PyCharm等)
+.vscode/              # VS Code
+*.suo                 # Visual Studio用户选项
+*.log                 # IDE日志
+
+# 编译产物
+/build/               # 编译输出目录
+/bin/                 # 二进制文件
+*.class               # Java字节码
+*.exe                 # 可执行文件
+*.dll                 # 动态链接库
+
+# 依赖目录
+/node_modules/        # Node.js
+/venv/               # Python虚拟环境
+/target/              # Maven构建输出
+/.gradle/             # Gradle缓存
+models/
+
+# 日志与临时文件
+*.log
+*.tmp
+*.bak
+
+# 环境变量文件（避免泄露敏感信息）
+.env
+*.env.local
+
+# 字节码缓存
+__pycache__/
+*.pyc
+
+# Jupyter Notebook检查点
+.ipynb_checkpoints/
