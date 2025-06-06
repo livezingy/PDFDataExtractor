@@ -21,7 +21,8 @@ desktop.ini
 /venv/               # Python虚拟环境
 /target/              # Maven构建输出
 /.gradle/             # Gradle缓存
-models/
+/models/              # 根目录下的models文件夹（包含Tesseract-OCR和table-transformer）
+!/core/models/        # 不忽略core目录下的models文件夹
 
 # 日志与临时文件
 *.log
