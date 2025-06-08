@@ -41,7 +41,7 @@ class OCRProcessor:
         base_dir = get_app_dir()
         self.config = {
             'tesseract_cmd': os.path.join(base_dir, 'models', 'Tesseract-OCR', 'tesseract.exe') if os.name == 'nt' else 'tesseract',
-            'tessdata_dir': os.path.join(base_dir, 'models', 'Tesseract-OCR', 'tessdata') if os.name == 'nt' else '/usr/share/tesseract-ocr/tessdata',
+            'tessdata_dir': os.path.join(base_dir, 'models', 'Tesseract-OCR', 'tessdata') if os.name == 'nt' else '/usr/share/tesseract-ocr/4.00/tessdata',
             'lang': 'eng',
             'config': '--psm 6',
             'preprocessing': True,
