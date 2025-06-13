@@ -5,6 +5,11 @@ import camelot
 
 
 class CameOptimizer:
+    # keep only parameters that are commonly used and supported by Camelot
+    CAMELOT_PARAM_WHITELIST = [
+        'flavor', 'pages', 'table_areas', 'table_regions', 'process_background'
+    ]
+
     def __init__(self, 
                  target_accuracy: float = 80.0,
                  target_whitespace: float = 30.0,
@@ -13,30 +18,42 @@ class CameOptimizer:
         self.target_whitespace = target_whitespace
         self.max_iterations = max_iterations
         
-    def optimize_table(self, pdf_path: str, initial_params: Dict):
+    def _filter_camelot_params(self, params: Dict) -> Dict:
+        if not params:
+            return {}
+        return {k: v for k, v in params.items() if k in self.CAMELOT_PARAM_WHITELIST}
+
+    def optimize_table(self, initial_params: Dict):
+
         """
         Optimize table extraction parameters
         
         Args:
-            pdf_path: Path to PDF file
-            initial_params: Initial parameters
+            initial_params: Initial parameters (should include process_background from user params)
             
         Returns:
             List[camelot.Table]: List of optimized tables
         """
         # First extraction
-        initial_tables = self._extract_tables(pdf_path, initial_params)
+        # Ensure process_background is passed to camelot
+        params = initial_params.copy()
+        pdf_path = initial_params.get('current_filepath')
+        if 'process_background' in initial_params:
+            params['process_background'] = initial_params['process_background']
+        # keep only Camelot-supported parameters
+        camelot_params = self._filter_camelot_params(params)
+        # set default flavor if not specified
+        if not camelot_params:
+            camelot_params = {'flavor': 'lattice'}
+        initial_tables = self._extract_tables(pdf_path, camelot_params)
         if not initial_tables:
             return initial_tables
-        print(f"Initial number of tables: {len(initial_tables)}")
-        print(f"Target accuracy: {self.target_accuracy}, Target whitespace: {self.target_whitespace}")
         
         # Check each table's accuracy and whitespace
         optimized_tables = []
         for table in initial_tables:
             # Check if current table meets requirements
             if self._is_acceptable(table.accuracy, table.whitespace):
-                print("Table meets requirements, skipping optimization")
                 optimized_tables.append(table)
                 continue
             
@@ -51,8 +68,11 @@ class CameOptimizer:
         return optimized_tables
             
     def _extract_tables(self, pdf_path: str, params: Dict):
-        """Extract tables with given parameters"""
+        """Extract tables with given parameters (不再重复过滤参数)"""
         try:
+            # set default flavor if not specified
+            if not params:
+                params = {'flavor': 'lattice'}
             return camelot.read_pdf(pdf_path, **params)
         except Exception as e:
             logging.error(f"Table extraction failed: {str(e)}")
@@ -64,28 +84,33 @@ class CameOptimizer:
         # Initialize adjustment counter
         adjustments = 0
         best_table = table
-        best_params = params.copy()
+        best_params = self._filter_camelot_params(params.copy())
+
+        # set default flavor if not specified
+        if not best_params:
+            best_params = {'flavor': 'lattice'}
         
         # Subsequent parameter adjustments only within table's page and region
-        print(f"Table region: {table._bbox}")
+        
         expanded_table = self.convert_and_expand_bbox(table, 10)
         best_params['table_regions'] = [f"{expanded_table[0]},{expanded_table[1]},{expanded_table[2]},{expanded_table[3]}"]
         best_params['pages'] = str(table.page)
 
-        b_process_background = False
-        
-        while adjustments < 3:          
-            print(f"Parameters before optimization: {best_params}")
-            print(f"Adjustment {adjustments + 1}")
-            
+        b_process_background = params.get('process_background', False)
+
+        while adjustments < 3:
+            logging.info(f"Parameters before optimization: {best_params}")
+            logging.info(f"Adjustment {adjustments + 1}")
+
             try:
                 if params['flavor'] == 'lattice':
                     if not b_process_background:
                         # Save original parameters
                         original_params = best_params.copy()
-                        best_params['process_background'] = True
-                        b_process_background = True
+                        best_params['process_background'] = False
+                        b_process_background = False
                     else:
+                        best_params['process_background'] = True
                         # Adjust line_scale based on table structure
                         best_params.update(self.optimize_lattice_params(best_table))
                     
@@ -105,30 +130,27 @@ class CameOptimizer:
                 elif params['flavor'] == 'hybrid':
                     best_params.update(self.optimize_hybrid_params(best_table))
                 
-                print(f"Parameters after optimization: {best_params}")
                 new_table = self._extract_tables(pdf_path, best_params)
-                print(f"Number of newly extracted tables: {len(new_table)}")
                 
                 if not new_table:
                     if params['flavor'] == 'lattice' and best_params.get("process_background"):
                         # If process_background fails, restore original parameters
                         best_params = original_params.copy()
-                        print("process_background failed, restoring original parameters")
                         continue
                     else:
                         # If no tables extracted, return original table
-                        print("No tables extracted after parameter adjustment, returning original table")
+                        logging.warning("No tables extracted after parameter adjustment, returning original table")
                         return best_table
                 
                 # Handle multiple tables case
                 if len(new_table) > 1:
-                    print(f"Detected {len(new_table)} tables in specified region")
+                    logging.info(f"Detected {len(new_table)} tables in specified region")
                     # 1. First check if any tables meet requirements
                     acceptable_tables = [t for t in new_table if self._is_acceptable(t.accuracy, t.whitespace)]
                     if acceptable_tables:
                         # If there are acceptable tables, choose the one with highest accuracy
                         best_new_table = max(acceptable_tables, key=lambda t: t.accuracy)
-                        print(f"Selected table with highest accuracy: accuracy {best_new_table.accuracy}, whitespace {best_new_table.whitespace}")
+                        logging.info(f"Selected table with highest accuracy: accuracy {best_new_table.accuracy}, whitespace {best_new_table.whitespace}")
                         return best_new_table
                     
                     # 2. If no acceptable tables, choose the one most similar to original
@@ -147,14 +169,12 @@ class CameOptimizer:
                     
                     # Select table with highest overlap
                     best_new_table = max(new_table, key=calculate_overlap)
-                    print(f"Selected table with highest overlap: overlap {calculate_overlap(best_new_table):.2f}")
                     return best_new_table
                 
                 # If only one table, use it directly
                 new_table = new_table[0]
                 
                 # Check metrics after process_background
-                print(f"New table accuracy: {new_table.accuracy}, whitespace: {new_table.whitespace}")
                 if self._is_acceptable(new_table.accuracy, new_table.whitespace):
                     return new_table
                 
@@ -167,19 +187,19 @@ class CameOptimizer:
                         # If not better, restore original parameters
                         best_table = table
                         best_params["process_background"] = False
-                print(f"Current parameters: {best_params}")
+                logging.info(f"Current parameters: {best_params}")
                 adjustments += 1
 
             except Exception as e:
-                print(f"Parameter adjustment failed: {str(e)}")
-                return best_table               
+                logging.error(f"Parameter adjustment failed: {str(e)}")
+                return best_table
         return best_table
     
     def _is_acceptable(self, accuracy, whitespace) -> bool:
         """Check if metrics meet requirements"""
-        print(f"Current accuracy: {accuracy}, whitespace: {whitespace}")
-        
-        return (accuracy >= self.target_accuracy)# and 
+        logging.info(f"Current accuracy: {accuracy}, whitespace: {whitespace}")
+
+        return (accuracy >= self.target_accuracy)# and
                 #whitespace <= self.target_whitespace)
                 
     def _is_better(self, accuracy, whitespace, old_accuracy, old_whitespace) -> bool:
@@ -322,10 +342,8 @@ class CameOptimizer:
         if not pdf_height:
             return None
             
-        print(f"Original bounding box: {table._bbox}")
         # 2. Convert coordinate system
         bbox = self._convert_bbox_coordinates(table._bbox, pdf_height)
-        print(f"Converted bounding box: {bbox}")
         # 3. Expand bounding box
         expanded_bbox = self._expand_bbox(bbox, table.pdf_size[0], pdf_height, percentage)
         
@@ -364,10 +382,10 @@ class CameOptimizer:
         new_y1 = min(y1 + height * percentage / 100, pdf_height)
         new_bbox = (new_x0, new_y0, new_x1, new_y1)
         return new_bbox
-    
-    
-  
-    
 
-    
-    
+
+
+
+
+
+

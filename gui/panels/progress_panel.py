@@ -196,26 +196,44 @@ class ProgressPanel(QWidget):
         
         # Images tab (always exists but initially empty)
         self.image_tab = QWidget()
-        self.image_viewer = ImageViewer()  # Assume already defined        
+        self.image_viewer = ImageViewer()  # Assume already defined
 
+        # --- Navigation buttons row ---
         control_widget = QWidget()
         btn_prev = QPushButton("← Previous")
         btn_next = QPushButton("Next →")
-        
-        btn_prev.clicked.connect(self.image_viewer.prev_page)
-        btn_next.clicked.connect(self.image_viewer.next_page)
-        
+        btn_prev.setFixedHeight(40)
+        btn_next.setFixedHeight(40)
+        btn_prev.setMinimumWidth(100)
+        btn_next.setMinimumWidth(100)
         nav_layout = QHBoxLayout(control_widget)
         nav_layout.addWidget(btn_prev)
         nav_layout.addWidget(btn_next)
-
+        nav_layout.addStretch()
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        # 绑定事件
+        btn_prev.clicked.connect(self.image_viewer.prev_page)
+        btn_next.clicked.connect(self.image_viewer.next_page)
+        # --- Image/No-image area ---
         image_layout = QVBoxLayout(self.image_tab)
-        image_layout.addWidget(control_widget)  # Add navigation buttons
-        self.no_images_label = QLabel("No images available")  # Use as member for dynamic show/hide
+        image_layout.addWidget(control_widget)
+        # 使用QScrollArea包裹image_viewer，支持大图滚动
+        from PySide6.QtWidgets import QScrollArea
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.image_viewer.setMinimumHeight(360)
+        self.image_viewer.setMinimumWidth(400)
+        self.scroll_area.setWidget(self.image_viewer)
+        self.no_images_label = QLabel("No images available")
+        self.no_images_label.setAlignment(Qt.AlignCenter)
+        self.no_images_label.setStyleSheet("color: #888; font-size: 14px; font-weight: normal;")
         image_layout.addWidget(self.no_images_label)
-        image_layout.addWidget(self.image_viewer)
-        self.no_images_label.setVisible(False)  # Default hidden
-        self.image_viewer.setVisible(False)     # Default hidden
+        image_layout.addWidget(self.scroll_area)
+        self.no_images_label.setVisible(True)
+        self.scroll_area.setVisible(False)
+        image_layout.setStretch(0, 0)  # control_widget
+        image_layout.setStretch(1, 1)  # no_images_label
+        image_layout.setStretch(2, 1)  # scroll_area
         
         # Add tabs
         self.tab_widget.addTab(self.progress_tab, "Progress")
@@ -318,7 +336,7 @@ class ProgressPanel(QWidget):
             item.setForeground(Qt.green)
             self.current_pdf_path = file_path  # record current PDF path
             if self.preview_enabled:
-                self._load_preview_images_for_pdf(file_path)
+                self._load_preview_images_for_pdf()
         else:
             item.setText(f"✗ {file_path}")
             item.setForeground(Qt.red)
@@ -346,41 +364,26 @@ class ProgressPanel(QWidget):
     def _on_tab_changed(self, idx):
         # Images Tab
         if idx == 1 and self.current_pdf_path and self.preview_enabled:
-            self._load_preview_images_for_pdf(self.current_pdf_path)
+            self._load_preview_images_for_pdf()
     
 
-    def _load_preview_images_for_pdf(self, pdf_path):
+    def _load_preview_images_for_pdf(self):
         import os, glob, re
-        base_name = os.path.splitext(os.path.basename(pdf_path))[0]
-        
-        preview_dir = get_output_subpath(
-            self.params.get('output_path', 'output'),  # 或用 self.params['output_path']
-            'preview',
-            '',  
-            base_name
+        preview_dir = get_output_subpath(self.params, 'preview')
+        image_paths = sorted(
+            glob.glob(os.path.join(preview_dir, f"page*_detection.png")),
+            key=lambda x: int(re.search(r'page(\\d+)_detection', os.path.basename(x)).group(1)) if re.search(r'page(\\d+)_detection', os.path.basename(x)) else 0
         )
-        
-        preview_dir = os.path.dirname(preview_dir) if preview_dir.endswith(os.sep) else preview_dir
-        print(f"Loading preview images from: {preview_dir}")
-        if os.path.exists(preview_dir):
-            image_paths = sorted(
-                glob.glob(os.path.join(preview_dir, "page*_detection.png")),
-                key=lambda x: int(re.search(r'page(\\d+)_detection', os.path.basename(x)).group(1)) if re.search(r'page(\\d+)_detection', os.path.basename(x)) else 0
-            )
-            print(f"Found {len(image_paths)} preview images")
-            print(f"Image paths: {image_paths}")
-            self.image_viewer.image_paths = image_paths
-            self.image_viewer.total_pages = len(image_paths)
-            if self.image_viewer.total_pages > 0:
-                self.no_images_label.setVisible(False)
-                self.image_viewer.setVisible(True)
-                self.image_viewer.current_page = 0
-                self.image_viewer.show_current_page()
-            else:
-                self.no_images_label.setVisible(True)
-                self.image_viewer.setVisible(False)
-                self.image_viewer.clear_cache()
+        self.image_viewer.image_paths = image_paths
+        self.image_viewer.total_pages = len(image_paths)
+        if self.image_viewer.total_pages > 0:
+            self.no_images_label.setVisible(False)
+            self.scroll_area.setVisible(True)
+            self.image_viewer.setVisible(True)
+            self.image_viewer.current_page = 0
+            self.image_viewer.show_current_page()
         else:
             self.no_images_label.setVisible(True)
+            self.scroll_area.setVisible(False)
             self.image_viewer.setVisible(False)
             self.image_viewer.clear_cache()

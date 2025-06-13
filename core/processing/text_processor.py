@@ -3,7 +3,6 @@ from typing import Dict, List, Optional, Tuple, Any
 from PIL import Image
 import time
 from core.processing.base_processor import BaseProcessor
-from core.processing.ocr_processor import OCRProcessor
 from core.processing.table_processor import TableProcessor
 from core.processing.came_optimizer import CameOptimizer
 from core.utils.logger import AppLogger
@@ -40,21 +39,22 @@ class TextProcessor(BaseProcessor):
                 'max_cell_count': 100
             },
             'overlap_threshold': 0.7,
-            'camelot_accuracy_threshold': 0.6,
+            # Remove hardcoded camelot_accuracy_threshold, will use params
         }
         if params:
             self.config.update(params)
             
-        self.ocr_processor = OCRProcessor(self.config.get('ocr'))
         self.table_processor = TableProcessor(self.config.get('table'))
         self.optimizer = CameOptimizer()
+        # page image cache, (file_path, page_num)
+        self._page_image_cache = {}
 
 
     def process(self, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Process PDF file
+        """Process PDF or image file
         
         Args:
-            file_path: Path to PDF file
+            file_path: Path to PDF or image file
             params: Processing parameters
             
         Returns:
@@ -64,7 +64,12 @@ class TextProcessor(BaseProcessor):
             params = params.copy() if params else self.params.copy()
             file_path = params.get('current_filepath')
             self.logger.info(f"Starting document processing: {file_path}")
-            # Get pages to process
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext in ['.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff']:
+                # Image file: use transformer+OCR pipeline
+                return self._process_image_file(file_path, params)
+            
+            # PDF file processing
             pages = params.get('pages', 'all')
             page_list = []
             if pages == 'all':
@@ -98,6 +103,7 @@ class TextProcessor(BaseProcessor):
                     if page_result['success']:
                         results['pages'][str(page_num)] = page_result['tables']
                         results['tables'].extend(page_result['tables'])
+                    self._page_image_cache.clear() # Clear cache after each page to save memory
                 except Exception as e:
                     self.logger.error(f"Page {page_num} processing failed: {str(e)}")
                     continue
@@ -116,6 +122,53 @@ class TextProcessor(BaseProcessor):
             }
         except Exception as e:
             self.logger.error(f"Document processing failed: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'pages': {},
+                'tables': []
+            }
+
+    def _process_image_file(self, file_path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Process a single image file using transformer detection + structure + OCR"""
+        try:
+            image = Image.open(file_path)
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+            detected_regions = self.table_processor.detect_tables(image, {'pages': 1})
+            self.logger.debug(f"Detected {len(detected_regions)} regions in image {file_path}")
+            # Visualize detection results
+            self._visualize_detection_results(
+                image,
+                [],  # there is no camelot results for image
+                detected_regions,
+                1
+            )
+            tables = []
+            for region in detected_regions:
+                table = self.table_processor.process_region(
+                    image,
+                    region,
+                    {**params, 'page_num': 1}
+                )
+                if table:
+                    tables.append(table)
+            
+            results = {
+                'success': True,
+                'pages': {'1': tables},
+                'tables': tables,
+                'export_path': ''
+            }
+            if params.get('export_results', True) and tables:
+                try:
+                    export_path = self._handle_export(results, params)
+                    results['export_path'] = export_path
+                except Exception as e:
+                    self.logger.error(f"Export failed: {str(e)}")
+            return results
+        except Exception as e:
+            self.logger.error(f"Image file processing failed: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),
@@ -142,7 +195,6 @@ class TextProcessor(BaseProcessor):
 
     def _get_parallel_results(self, page_num: int, params: Dict[str, Any]) -> Tuple[List[Dict], List[Dict]]:
         try:
-            import pdfplumber
             params_copy = params.copy()
             file_path = params_copy.get('current_filepath')
             pdf_size = None
@@ -153,41 +205,43 @@ class TextProcessor(BaseProcessor):
 
             process_image = self._load_page_image(file_path, page_num)
             self.logger.debug(f"Loaded page image for {file_path} page {page_num}, size: {process_image.size}")
-            
+
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=2) as executor:
                 self.logger.debug(f"Starting Camelot processing for {file_path} page {page_num}")
                 camelot_future = executor.submit(
                     self.optimizer.optimize_table,
-                    file_path,
-                    {
-                        'flavor': params_copy.get('camelot_mode', 'hybrid'),
-                        'pages': str(page_num)
-                    }
+                    params_copy
                 )
                 self.logger.debug(f"Starting Transformer detection for {file_path} page {page_num}")
                 model_future = executor.submit(
                     self.table_processor.detect_tables,
                     process_image,
-                    {
-                        'pages': page_num
-                    }
+                    params_copy
                 )
                 camelot_tables = camelot_future.result()
                 detected_regions = model_future.result()
+
+                # Robust None/type checks
+                if camelot_tables is None or not isinstance(camelot_tables, (list, tuple)):
+                    camelot_tables = []
+                if detected_regions is None or not isinstance(detected_regions, (list, tuple)):
+                    detected_regions = []
+
                 if camelot_tables and process_image.size:
                     image_to_pdf_scale = (
                         process_image.size[0] / pdf_size[0],
                         process_image.size[1] / pdf_size[1]
                     )
                     self.logger.debug(f"Image to PDF scale factor: {image_to_pdf_scale}")
+
                 self.logger.debug(f"Camelot detection results for {file_path} page {page_num}:", {
                     'table_count': len(camelot_tables),
                     'tables': [
                         {
-                            'accuracy': table.accuracy,
-                            'whitespace': table.whitespace,
-                            'bbox': table._bbox
+                            'accuracy': getattr(table, 'accuracy', None),
+                            'whitespace': getattr(table, 'whitespace', None),
+                            'bbox': getattr(table, '_bbox', None)
                         }
                         for table in camelot_tables
                     ]
@@ -196,9 +250,9 @@ class TextProcessor(BaseProcessor):
                     'table_count': len(detected_regions),
                     'regions': [
                         {
-                            'confidence': region['confidence'],
-                            'bbox': region['bbox'],
-                            'type': region['type']
+                            'confidence': region.get('confidence'),
+                            'bbox': region.get('bbox'),
+                            'type': region.get('type')
                         }
                         for region in detected_regions
                     ]
@@ -207,11 +261,11 @@ class TextProcessor(BaseProcessor):
                 if camelot_tables:
                     camelot_results = [
                         {
-                            'data': table.df.values.tolist(),
-                            'columns': table.df.columns.tolist(),
-                            'accuracy': table.accuracy,
-                            'whitespace': table.whitespace,
-                            'bbox': table._bbox,
+                            'data': getattr(table, 'df', None).values.tolist() if getattr(table, 'df', None) is not None else [],
+                            'columns': getattr(table, 'df', None).columns.tolist() if getattr(table, 'df', None) is not None else [],
+                            'accuracy': getattr(table, 'accuracy', None),
+                            'whitespace': getattr(table, 'whitespace', None),
+                            'bbox': getattr(table, '_bbox', None),
                             'page': page_num,
                             'pdf_size': pdf_size,
                             'matched': False,
@@ -219,26 +273,26 @@ class TextProcessor(BaseProcessor):
                         }
                         for table in camelot_tables
                     ]
+                
                 self._visualize_detection_results(
                     process_image,
                     camelot_results,
                     detected_regions,
-                    file_path,
                     page_num
                 )
                 return camelot_results, detected_regions
         except Exception as e:
-            self.logger.error(f"Parallel processing failed for {file_path} page {page_num}: {str(e)}", exc_info=True)
+            self.logger.error(f"Parallel processing failed for page {page_num}: {str(e)}", exc_info=True)
             return [], []
 
-    def _process_detected_regions(self, page_num: int,params: Dict[str, Any], camelot_results: List[Dict], detected_regions: List[Dict]) -> List[Dict]:
+    def _process_detected_regions(self, page_num: int, params: Dict[str, Any], camelot_results: List[Dict], detected_regions: List[Dict]) -> List[Dict]:
         """
         1. For each table-transformer detected region, find the matching Camelot region (after coordinate transformation), and decide to use Camelot, retry Camelot with tuned parameters, or use table-transformer+OCR based on accuracy thresholds.
         2. For regions not matched to Camelot, use table-transformer+OCR.
         3. Deduplicate results to ensure each table is output only once.
         """
         page_tables = []        
-        threshold_camlot = self.config.get('camelot_accuracy_threshold', 0.6)  # Threshold 1
+        threshold_camlot = params.get('camelot_accuracy_threshold', 0.6)  # Use user param
         used_camelot_idx = set()
         file_path = params.get('current_filepath', '')
         process_image = self._load_page_image(file_path, page_num)
@@ -249,15 +303,15 @@ class TextProcessor(BaseProcessor):
             best_camelot = None
             best_overlap = 0
             best_idx = -1
-            # 2. Find matching Camelot region (coordinate transformation)
+            image_width, image_height = process_image.size
             for idx, camelot_table in enumerate(camelot_results):
                 if idx in used_camelot_idx:
                     continue
                 camelot_bbox = camelot_table['bbox']
                 if 'pdf_size' in camelot_table:
                     pdf_width, pdf_height = camelot_table['pdf_size']
-                    x1, y2 = self.pdf_to_image_coords(camelot_bbox[0], camelot_bbox[1], process_image, pdf_width, pdf_height)
-                    x2, y1 = self.pdf_to_image_coords(camelot_bbox[2], camelot_bbox[3], process_image, pdf_width, pdf_height)
+                    x1, y2 = self.pdf_to_image_coords(camelot_bbox[0], camelot_bbox[1], image_width, image_height, pdf_width, pdf_height)
+                    x2, y1 = self.pdf_to_image_coords(camelot_bbox[2], camelot_bbox[3], image_width, image_height, pdf_width, pdf_height)
                     camelot_bbox_img = [x1, y1, x2, y2]
                 else:
                     camelot_bbox_img = camelot_bbox
@@ -300,7 +354,9 @@ class TextProcessor(BaseProcessor):
     def _process_with_model(self, page_num: int, region: Dict, params: Dict[str, Any]) -> Optional[Dict]:
         try:
             file_path = params.get('current_filepath', '')
-            image = self._load_page_image(file_path, page_num)
+            image = params.get('process_image')
+            if image is None:
+                image = self._load_page_image(file_path, page_num)
             table = self.table_processor.process_region(
                 image,
                 region,
@@ -312,15 +368,11 @@ class TextProcessor(BaseProcessor):
             return None
 
     def _load_page_image(self, file_path: str, page_num: int) -> Image.Image:
-        """Load PDF page image
-        
-        Args:
-            file_path: PDF file path
-            page_num: Page number
-            
-        Returns:
-            PIL image object
-        """
+    
+        cache_key = (file_path, page_num)
+        if cache_key in self._page_image_cache:
+            self.logger.debug(f"Using cached image for {file_path} page {page_num}")
+            return self._page_image_cache[cache_key]
         try:
             import pdf2image
             images = pdf2image.convert_from_path(
@@ -328,7 +380,10 @@ class TextProcessor(BaseProcessor):
                 first_page=page_num,
                 last_page=page_num
             )
-            return images[0]
+            image = images[0]
+            self._page_image_cache[cache_key] = image
+            self.logger.debug(f"Loaded and cached image for {file_path} page {page_num}, size: {image.size}")
+            return image
         except Exception as e:
             self.logger.error(f"Failed to load page image: {str(e)}")
             raise RuntimeError(f"Failed to load page image: {str(e)}")
@@ -402,6 +457,8 @@ class TextProcessor(BaseProcessor):
         self,
         bbox: Tuple[float, float, float, float],
         camelot_tables: List[Dict],
+        image_width: int,
+        image_height: int,
         params: Dict[str, Any]
     ) -> Optional[Dict]:
         """Find best matching Camelot table
@@ -409,6 +466,8 @@ class TextProcessor(BaseProcessor):
         Args:
             bbox: Table bounding box (in image coordinates)
             camelot_tables: List of Camelot tables
+            image_width: Width of the page image
+            image_height: Height of the page image
             params: Processing parameters
             
         Returns:
@@ -425,24 +484,19 @@ class TextProcessor(BaseProcessor):
         if camelot_tables and 'pdf_size' in camelot_tables[0]:
             pdf_width, pdf_height = camelot_tables[0]['pdf_size']
             self.logger.debug(f"PDF size for coordinate conversion: {pdf_width}x{pdf_height}")
-        
         for idx, camelot_table in enumerate(camelot_tables):
-            # Convert Camelot table coordinates to image coordinate system
             camelot_bbox = camelot_table['bbox']
-            original_bbox = list(camelot_bbox)  # Convert tuple to list for logging
-            
-            if pdf_height and pdf_width and 'process_image' in params:
-                # Convert coordinates using pdf_to_image_coords
-                x1, y2 = self.pdf_to_image_coords(camelot_bbox[0], camelot_bbox[1], params['process_image'], pdf_width, pdf_height)
-                x2, y1 = self.pdf_to_image_coords(camelot_bbox[2], camelot_bbox[3], params['process_image'], pdf_width, pdf_height)
+            original_bbox = list(camelot_bbox)
+            if pdf_height and pdf_width and image_width and image_height:
+                x1, y2 = self.pdf_to_image_coords(camelot_bbox[0], camelot_bbox[1], image_width, image_height, pdf_width, pdf_height)
+                x2, y1 = self.pdf_to_image_coords(camelot_bbox[2], camelot_bbox[3], image_width, image_height, pdf_width, pdf_height)
                 camelot_bbox = [x1, y1, x2, y2]
-                
                 self.logger.debug(f"Coordinate conversion for table {idx}:", {
                     'original_bbox': original_bbox,
                     'converted_bbox': camelot_bbox,
-                    'pdf_size': (pdf_width, pdf_height)
+                    'pdf_size': (pdf_width, pdf_height),
+                    'image_size': (image_width, image_height)
                 })
-            
             overlap = self._calculate_overlap(
                 bbox,
                 camelot_bbox
@@ -482,7 +536,6 @@ class TextProcessor(BaseProcessor):
         image: Image.Image,
         camelot_results: List[Dict],
         transformer_results: List[Dict],
-        file_path: str,
         page_num: int
     ):
         """Visualize detection results and save annotated image
@@ -495,66 +548,66 @@ class TextProcessor(BaseProcessor):
             page_num: Page number
         """
         try:
-            from PIL import ImageDraw
+            from PIL import ImageDraw, ImageFont
+            # check if image is valid
+            if image is None or not hasattr(image, 'copy'):
+                self.logger.error("Input image is None or invalid, cannot visualize detection results.")
+                return
+            # check if results are lists            
+            if not isinstance(camelot_results, list):
+                camelot_results = []
+            if not isinstance(transformer_results, list):
+                transformer_results = []
+            if not camelot_results and not transformer_results:
+                self.logger.info("No detection results to visualize.")
+                return
+
             
+            self.logger.debug(f"Visualizing detection results for page {page_num} with {len(camelot_results)} Camelot tables and {len(transformer_results)} Transformer regions.")
             # Create a copy of the image for drawing
             draw_image = image.copy()
             draw = ImageDraw.Draw(draw_image)
-            
+            # Load font
+            font = None
+            try:
+                font = ImageFont.truetype("arial.ttf", 24)
+            except Exception:
+                font = ImageFont.load_default()
             # Draw Camelot results in blue
             for idx, result in enumerate(camelot_results):
-                bbox = result['bbox']
+                bbox = result.get('bbox')
+                if not bbox or len(bbox) != 4:
+                    continue
                 # Convert coordinates if needed
                 if 'pdf_size' in result:
                     pdf_width, pdf_height = result['pdf_size']
-                    # Convert coordinates using pdf_to_image_coords
-                    x1, y2 = self.pdf_to_image_coords(bbox[0], bbox[1], image, pdf_width, pdf_height)
-                    x2, y1 = self.pdf_to_image_coords(bbox[2], bbox[3], image, pdf_width, pdf_height)
+                    image_width, image_height = image.size
+                    x1, y2 = self.pdf_to_image_coords(bbox[0], bbox[1], image_width, image_height, pdf_width, pdf_height)
+                    x2, y1 = self.pdf_to_image_coords(bbox[2], bbox[3], image_width, image_height, pdf_width, pdf_height)
                     bbox = [x1, y1, x2, y2]
                     self.logger.debug(f"Camelot table {idx+1} converted bbox: {bbox}")
-                
-                draw.rectangle(
-                    bbox,
-                    outline='blue',
-                    width=3
-                )
-                # Add label
-                draw.text(
-                    (bbox[0], bbox[1] - 20),
-                    f"Camelot {idx+1} (acc: {result['accuracy']:.2f})",
-                    fill='blue'
-                )
-            
+                draw.rectangle(bbox, outline='blue', width=3)
+                try:
+                    acc = float(result.get('accuracy', 0))
+                except Exception:
+                    acc = 0
+                draw.text((bbox[0], bbox[1] - 28), f"Camelot {idx+1} (acc: {acc:.2f})", fill='blue', font=font)
             # Draw Transformer results in red
             for idx, result in enumerate(transformer_results):
-                bbox = result['bbox']
-                draw.rectangle(
-                    bbox,
-                    outline='red',
-                    width=3
-                )
-                # Add label
-                draw.text(
-                    (bbox[0], bbox[1] - 20),
-                    f"Transformer {idx+1} (conf: {result['confidence']:.2f})",
-                    fill='red'
-                )
-            
-            # Generate output filename and pdf_stem
-            base_name = os.path.splitext(os.path.basename(file_path))[0]
-            pdf_stem = base_name
+                bbox = result.get('bbox')
+                if not bbox or len(bbox) != 4:
+                    continue
+                draw.rectangle(bbox, outline='red', width=3)
+                try:
+                    conf = float(result.get('confidence', 0))
+                except Exception:
+                    conf = 0
+                draw.text((bbox[0], bbox[1] - 28), f"Transformer {idx+1} (conf: {conf:.2f})", fill='red', font=font)
             filename = f"page{page_num}_detection.png"
-            output_path = get_output_subpath(
-                self.params['output_path'],
-                'preview',
-                filename,
-                pdf_stem
-            )
-            
+            output_path = get_output_subpath(self.params, 'preview', filename=filename)
             # Save annotated image
             draw_image.save(output_path)
             self.logger.info(f"Saved detection visualization to: {output_path}")
-            
         except Exception as e:
             self.logger.error(f"Failed to visualize detection results: {str(e)}", exc_info=True)
 
@@ -574,13 +627,11 @@ class TextProcessor(BaseProcessor):
         return image_scalers, pdf_scalers
     
         
-    def pdf_to_image_coords(self, x, y, pdf_image, pdf_width, pdf_height):
-        
-        image_scalers, _ = self.get_coordinate_transformers(pdf_image, pdf_width, pdf_height)
-        scale_x, scale_y = image_scalers
-        
+    def pdf_to_image_coords(self, x, y, image_width, image_height, pdf_width, pdf_height):
+        """Convert PDF coordinates to image coordinates using explicit image/pdf size."""
+        scale_x = image_width / float(pdf_width)
+        scale_y = image_height / float(pdf_height)
         img_x = int(x * scale_x)
         img_y = int(abs(y - pdf_height) * scale_y)
-        
         return img_x, img_y
 

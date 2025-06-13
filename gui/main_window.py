@@ -72,10 +72,10 @@ class MainWindow(QMainWindow):
     def __init__(self):
         """Initialize main window"""
         super().__init__()
-        self.logger = AppLogger.get_logger()
+        self.logger = AppLogger.get_logger()  # 先实例化单例但不初始化日志目录
         self.thread_pool = QThreadPool()
         self._init_ui()
-        
+    
     def _init_ui(self):
         """Initialize UI components"""
         # Set window properties
@@ -119,9 +119,8 @@ class MainWindow(QMainWindow):
         # Connect signals
         self.file_panel.files_added.connect(self._handle_files_added)
         self.params_panel.process_started.connect(self._handle_process_started)
-        
-        self.logger.log_operation("Window initialization")
-        
+        # 不在这里log_operation，等logger初始化后再log
+
     def _handle_files_added(self, files: List[str]):
         """Handle file addition
         
@@ -132,9 +131,10 @@ class MainWindow(QMainWindow):
             # Update process panel
             #self.params_panel.reset()
             
-            self.logger.log_operation("File addition handling", {
-                "file_count": len(files)
-            })
+            """ if self.logger:
+                self.logger.log_operation("File addition handling", {
+                    "file_count": len(files)
+                }) """
             
         except Exception as e:
             self.logger.log_exception(e, {
@@ -148,12 +148,14 @@ class MainWindow(QMainWindow):
             params: Process parameters
         """
         try:
+            output_path = params.get('output_path')
+            if output_path:
+                self.logger.set_output_path(output_path)  
             # Get files from file panel
             files = self.file_panel._get_file_list()
             if not files:
                 QMessageBox.warning(self, "Warning", "No files selected")
                 return
-                
             # Start processing each file
             for file_path in files:
                 file_params = params.copy()  # copy parameters for each file
@@ -161,7 +163,7 @@ class MainWindow(QMainWindow):
                 file_params['current_filepath'] = file_path  # set current file path
                 task_id = str(uuid.uuid4())
                 task = FileTask(task_id, file_params)
-                
+                task.logger = self.logger  # 所有子线程用同一个logger实例
                 # Connect signals
                 task.signals.progress_updated.connect(
                     lambda p, m: self.progress_panel.update_progress(p, m)
@@ -172,20 +174,19 @@ class MainWindow(QMainWindow):
                 task.signals.error_occurred.connect(
                     lambda f, e: self.progress_panel.show_error(f, str(e))
                 )
-                
                 # Start task
                 self.thread_pool.start(task)
-                
-            self.logger.log_operation("Process start handling", {
-                "params": params,
-                "file_count": len(files)
-            })
-            
+            if self.logger:
+                self.logger.log_operation("Process start handling", {
+                    "params": params,
+                    "file_count": len(files)
+                })
         except Exception as e:
-            self.logger.log_exception(e, {
-                "operation": "Process start handling"
-            })
-            
+            if self.logger:
+                self.logger.log_exception(e, {
+                    "operation": "Process start handling"
+                })
+    
     def closeEvent(self, event):
         """Handle window close event
         
@@ -193,16 +194,17 @@ class MainWindow(QMainWindow):
             event: Close event
         """
         try:
-            #wait for all the threads ended
             self.thread_pool.waitForDone()
             self.progress_panel.image_viewer.clear_cache()
-            self.logger.log_operation("Window closing")
+            if self.logger:
+                self.logger.log_operation("Window closing")
             gc.collect()
             event.accept()
         except Exception as e:
-            self.logger.log_exception(e, {
-                "operation": "Window closing"
-            })
+            if self.logger:
+                self.logger.log_exception(e, {
+                    "operation": "Window closing"
+                })
             event.accept()
 
 
