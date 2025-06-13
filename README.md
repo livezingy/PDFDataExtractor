@@ -92,16 +92,6 @@ PDFDataExtractor/
 
   ![GUI Preview Screenshot](docs/Images/PDF%20Table%20Extractor_processpdf.png)
 
-## 界面操作演示 | GUI Operation Demo
-
-- 处理流程界面截图：
-
-![处理流程](docs/Images/PDF Table Extractor_processImage.png)
-
-- 结果预览界面截图：
-
-![结果预览](docs/Images/PDF Table Extractor_processpdf.png)
-
 ## Contribution
 Issues and PRs are welcome! For development, please refer to docs/architecture.md and docs/implementation.md.
 
