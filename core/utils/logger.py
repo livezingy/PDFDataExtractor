@@ -43,14 +43,7 @@ class AppLogger:
         if AppLogger._instance is not None:
             raise Exception("This class is a singleton!")
         AppLogger._instance = self
-        # set default output_path
-        if getattr(sys, 'frozen', False):
-            # package mode, sys.executable is the main executable
-            default_output = os.path.join(os.path.dirname(sys.executable), 'output')
-        else:
-            # the same directory as the script
-            default_output = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'output')
-        self.config = {'output_path': default_output}
+        self.config = {}  # Initialize config dictionary
         self._init_logger()
             
     def _init_logger(self):
@@ -73,22 +66,22 @@ class AppLogger:
         
         # Create file handler
         # Get output paths from configuration
-        if hasattr(self, 'config') and 'output_path' in self.config and self.config['output_path']:
+        if hasattr(self, 'config') and 'output_path' in self.config:
             # Use user specified output path
-            try:
-                paths = get_output_paths(self.config['output_path'])
-                log_dir = paths['debug']
-            except Exception:
-                # fallback if get_output_paths fails
-                log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
+            paths = get_output_paths(self.config['output_path'])
+            log_dir = paths['debug']
         else:
             # Fallback to default logs directory
             log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
+            
+        os.makedirs(log_dir, exist_ok=True)
+        
         # Ensure log directory exists
         file_handler = RotatingFileHandler(
             os.path.join(log_dir, 'app.log'),
             maxBytes=10*1024*1024,  # 10MB
-            backupCount=5
+            backupCount=5,
+            encoding='utf-8'  # Ensure utf-8 encoding for log file
         )
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(file_formatter)
@@ -221,7 +214,5 @@ class AppLogger:
         Args:
             output_path: Path to output directory
         """
-        # set output path in config when output_path is changed
-        if self.config.get('output_path') != output_path:
-            self.config['output_path'] = output_path
-            self._init_logger()  # Reinitialize logger with new path
+        self.config['output_path'] = output_path
+        self._init_logger()  # Reinitialize logger with new path

@@ -112,7 +112,7 @@ class FilePanel(QWidget):
                 self,
                 "Select Files",
                 "",
-                "PDF Files (*.pdf);;All Files (*.*)"
+                "PDF/Image Files (*.pdf *.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*.*)"
             )
             
             if files:
@@ -176,7 +176,7 @@ class FilePanel(QWidget):
         files = []
         for url in event.mimeData().urls():
             file = url.toLocalFile()
-            if file.lower().endswith('.pdf'):
+            if file.lower().endswith(('.pdf', '.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')):
                 files.append(file)
                 
         if files:

@@ -40,16 +40,25 @@ class TableDetector:
     def detect_tables(
         self, 
         image: Image.Image,
-        page_num: int = 0
+        page_num: int = 0,
+        detection_threshold: float = None
     ) -> List[TableRegion]:
-        """Optimized detection using shared models"""
+        """Optimized detection using shared models
+        detection_threshold: user-set threshold from params_panel, fallback to config['min_confidence'] if None
+        """
         start_time = time.time()
         try:
-            # Use model service for detection
-            boxes, scores, labels = self.models.detect_tables(
+            # Use user-set detection_threshold if provided, else fallback to config
+            min_conf = detection_threshold if detection_threshold is not None else self.config['min_confidence']
+            # Ensure models.detect_tables returns (boxes, scores, labels) or (boxes, scores)
+            result = self.models.detect_tables(
                 image,
-                self.config['min_confidence']
+                min_conf
             )
+            if len(result) == 3:
+                boxes, scores, labels = result
+            else:
+                boxes, scores = result
             
             # Convert to table regions
             regions = []

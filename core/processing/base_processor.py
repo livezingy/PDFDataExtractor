@@ -24,7 +24,69 @@ class BaseProcessor(ABC):
         """Initialize base processor"""
         self.logger = AppLogger.get_logger()
         
-    
+    def process_pdf_pages(self, file_path: str, params: Dict[str, Any], progress_callback=None) -> Dict[str, Any]:
+        """Process PDF file page by page
+        
+        Args:
+            file_path: Path to PDF file
+            params: Processing parameters
+            progress_callback: Optional callback function for progress updates
+            
+        Returns:
+            Processing results
+        """
+        try:
+            # Get total pages
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                total_pages = len(pdf.pages)
+                
+            # Initialize results
+            results = {
+                'pages': {},
+                'tables': []
+            }
+            
+            # Process page by page
+            for page_num in range(1, total_pages + 1):
+                try:
+                    # Update progress
+                    if progress_callback:
+                        progress = int((page_num - 1) / total_pages * 100)
+                        progress_callback(progress, f"Processing page {page_num}/{total_pages}")
+                    
+                    # Process current page
+                    page_params = {
+                        **params,
+                        'pages': page_num,
+                        'current_file': file_path
+                    }
+                    
+                    page_result = self.process(file_path, page_params)
+                    
+                    if page_result.get('success'):
+                        results['pages'][page_num] = page_result.get('tables', [])
+                        results['tables'].extend(page_result.get('tables', []))
+                        
+                except Exception as e:
+                    self.logger.error(f"Page {page_num} processing failed: {str(e)}", exc_info=True)
+                    continue
+                    
+            # Export results if needed
+            if params.get('export_results', True):
+                export_path = self._handle_export(results, params)
+                results['export_path'] = export_path
+                
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"PDF processing failed: {str(e)}", exc_info=True)
+            return {
+                'success': False,
+                'error': str(e),
+                'pages': {},
+                'tables': []
+            }
             
     @abstractmethod
     def process(self, file_path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -91,22 +153,33 @@ class BaseProcessor(ABC):
         """
         try:
             if not results or not results.get('tables'):
+                self.logger.warning("No table data to export")
                 return ""
-            export_format = params.get('export_format', 'csv')
+                
+            # Get export parameters
+            export_format = params.get('export_format', 'csv')  # Default to CSV
             output_path = params.get('output_path', '')
+            
             if not output_path:
-                return ""
-            # get pdf_stem
-            pdf_stem = os.path.splitext(os.path.basename(params.get('current_filepath', '')))[0] if params.get('current_filepath') else "unknown"
+                raise ValueError("Output path must be specified")
+            
+            # Get data subfolder path
+            from core.utils.path_utils import get_output_subpath
+            
+            # Generate filename
             timestamp = time.strftime("%Y%m%d_%H%M%S")
-            filename = f"tables_{timestamp}.{export_format}"
-            filepath = get_output_subpath(output_path, 'data', filename, pdf_stem)
+            filename = f"{timestamp}_tables.{export_format}"
+            filepath = get_output_subpath(params,'data',filename)
+
+            # Export data
             if export_format == 'csv':
                 self._export_tables_csv(results['tables'], filepath)
             elif export_format == 'json':
                 self._export_tables_json(results['tables'], filepath)
+                
             self.logger.info(f"Data exported successfully: {filepath}")
             return filepath
+            
         except Exception as e:
             self.logger.error(f"Export failed: {str(e)}", exc_info=True)
             return ""
@@ -243,10 +316,10 @@ class BaseProcessor(ABC):
         for box in boxes:
             draw.rectangle(box, outline="red", width=3)
         return image
+    
+    
 
-
-
-
+    
 
 
 

@@ -5,9 +5,6 @@ import platform
 from typing import Dict
 from config.paths import get_output_structure, get_valid_extensions
 
-
-
-
 def get_app_dir() -> str:
     """Get application root directory (compatible with packaged mode)
     
@@ -38,12 +35,11 @@ def get_tessdata_dir() -> str:
         return os.path.join(get_app_dir(), 'tesseract', 'tessdata')
     return '/usr/share/tesseract-ocr/4.00/tessdata'
 
-def get_output_paths(base_path: str, pdf_stem: str = None) -> Dict[str, str]:
-    """Get all output paths, optionally with a subfolder for each PDF
+def get_output_paths(base_path: str) -> Dict[str, str]:
+    """Get all output paths
     
     Args:
         base_path: User specified base output path
-        pdf_stem: PDF file name without extension (optional)
         
     Returns:
         Dictionary containing all output paths
@@ -51,18 +47,11 @@ def get_output_paths(base_path: str, pdf_stem: str = None) -> Dict[str, str]:
     # Get output structure from configuration
     output_structure = get_output_structure()
     
-    if pdf_stem:
-        # Create paths with PDF stem subfolder
-        paths = {
-            subfolder: os.path.join(base_path, subfolder, pdf_stem)
-            for subfolder in output_structure.keys()
-        }
-    else:
-        # Create paths without PDF stem subfolder
-        paths = {
-            subfolder: os.path.join(base_path, subfolder)
-            for subfolder in output_structure.keys()
-        }
+    # Create paths dictionary
+    paths = {
+        subfolder: os.path.join(base_path, subfolder)
+        for subfolder in output_structure.keys()
+    }
     
     # Create directories if they don't exist
     for path in paths.values():
@@ -70,32 +59,32 @@ def get_output_paths(base_path: str, pdf_stem: str = None) -> Dict[str, str]:
         
     return paths
 
-def get_output_subpath(base_path: str, subfolder: str, filename: str, pdf_stem: str) -> str:
-    """Get output file path in specific subfolder, with pdf_stem subdir
+def get_output_subpath(params: dict, subfolder: str, filename: str = "") -> str:
+    """
+    Get output file or directory path in a specific subfolder, with pdf_stem subdir.
     
     Args:
-        base_path: Base output path
-        subfolder: Subfolder name (data/debug/preview)
-        filename: Output filename
-        pdf_stem: PDF file name without extension (required)
+        params: dict containing 'output_path' and 'current_filepath' or 'current_file'
+        subfolder: subfolder name (data/debug/preview)
+        filename: output filename (optional)
         
     Returns:
-        Full output file path
+        Full output file path (if filename is given) or directory path (if filename is empty)
         
     Raises:
-        ValueError: If subfolder is invalid or file extension is not allowed
+        ValueError: If required arguments are missing or invalid
     """
     output_structure = get_output_structure()
+    output_path = params.get('output_path', '')
+    file_path = params.get('current_filepath')
+    if not output_path or not file_path:
+        raise ValueError("params must contain output_path and current_filepath")
+    pdf_stem = os.path.splitext(os.path.basename(file_path))[0]
     if subfolder not in output_structure:
         raise ValueError(f"Invalid subfolder: {subfolder}")
-    file_ext = os.path.splitext(filename)[1].lower()
-    """  valid_extensions = get_valid_extensions(subfolder)
-    if file_ext not in valid_extensions:
-        raise ValueError(
-            f"Invalid file extension {file_ext} for {subfolder}. "
-            f"Allowed extensions: {valid_extensions}"
-        ) """
-    # generate path：output/subfolder/pdf_stem/filename
-    full_dir = os.path.join(base_path, subfolder, pdf_stem)
+    full_dir = os.path.join(output_path, subfolder, pdf_stem)
     os.makedirs(full_dir, exist_ok=True)
-    return os.path.join(full_dir, filename)
+    if filename:
+        return os.path.join(full_dir, filename)
+    else:
+        return full_dir
