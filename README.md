@@ -1,93 +1,99 @@
 # PDFDataExtractor
 
-## Overview
-PDFDataExtractor is a robust, extensible pipeline for extracting tables and structured data from PDF documents. It is designed to handle a wide variety of PDF types, including text-based, image-based, and hybrid documents. The system integrates multiple table detection and extraction strategies (Camelot and deep learning-based table-transformer), and provides dynamic parameter optimization to maximize extraction accuracy. The project features a modern GUI built with PySide6, supporting batch processing, parameter customization, and visual preview of extraction results.
+## 项目简介 | Project Overview
+PDFDataExtractor 是一个面向 PDF/图片表格自动检测与结构化导出的工具，支持多种检测模型和参数优化，适用于批量、复杂文档的高效处理。
 
-## Core Processing Logic
+PDFDataExtractor is a tool for automatic table detection and structured export from PDF/images, supporting multiple detection models and parameter optimization, suitable for efficient processing of batch and complex documents.
 
-### Table Detection and Extraction Workflow
-For each PDF file and each selected page, the system performs the following steps:
+## 主要特性 | Key Features
+- 支持 PDF、图片的表格检测与结构化导出
+- 支持 Camelot、Table-Transformer 等多种检测方式
+- 可视化检测结果预览
+- 参数可配置，支持批量处理
+- 现代化 GUI，支持拖拽、批量、参数自定义
+- 日志与错误追踪，便于调试和维护
 
-1. **Parallel Table Detection**
-   - Camelot is used to detect tables using the selected flavor (lattice, stream, hybrid, or network)
-   - Table-Transformer (deep learning model) is used to detect table regions in the page image
-   - Both detection methods run in parallel for efficiency
+## 快速开始 | Quick Start
+```bash
+pip install -r requirements.txt
+python main.py
+```
 
-2. **Table Region Matching and Decision Logic**
-   - For each table region detected by the transformer, the system attempts to find the best-matching Camelot table (after coordinate transformation)
-   - If a matching Camelot table is found and its accuracy is above a configurable threshold:
-     - The Camelot result is used directly
-   - If the Camelot table's accuracy is below the threshold:
-     - The system attempts to re-extract the table using dynamically optimized Camelot parameters
-     - If the result is still unsatisfactory, the system falls back to using the transformer region with OCR-based extraction
-   - If no matching Camelot table is found:
-     - The transformer region is processed with OCR to extract the table content
+## 依赖环境 | Requirements
+- Python 3.10+
+- 主要依赖：Camelot, PyTorch, Transformers, PIL, PySide6, pdfplumber, pytesseract 等
 
-3. **Deduplication and Supplementation**
-   - Results are deduplicated to ensure each table is output only once
-   - High-accuracy Camelot tables not matched to any transformer region are also included in the final results
+## 模型文件获取与放置说明 | Model Files Notice
+本项目依赖较大的模型文件（如 Table-Transformer、Tesseract-OCR），请用户根据下述说明手动下载并放置：
 
-4. **Parameter Optimization**
-   - If Camelot's initial extraction is not accurate enough, the system analyzes the table's structure and dynamically adjusts parameters
-   - This process is repeated for a limited number of iterations or until the result meets the accuracy requirements
+- Table-Transformer: 下载地址见 [官方仓库](https://github.com/microsoft/table-transformer) 或 [HuggingFace](https://huggingface.co/microsoft/table-transformer)。
+- Tesseract-OCR: 可从 [Tesseract 官方](https://github.com/tesseract-ocr/tesseract) 或 [各平台发行版](https://github.com/tesseract-ocr/tesseract/wiki) 下载。
 
-5. **Result Export and Visualization**
-   - Extracted tables are saved in the specified output format (CSV/JSON)
-   - Annotated images showing detected tables are saved for visual inspection
-   - All outputs are organized in per-PDF subfolders for easy management
+请将上述模型文件分别放置于本项目根目录下的 `models/table-transformer/` 和 `models/Tesseract-OCR/` 文件夹内，结构如下：
 
-## User Interface & Operation
+```
+PDFDataExtractor/
+├─ main.py
+├─ models/
+│  ├─ table-transformer/
+│  └─ Tesseract-OCR/
+```
 
-### File Selection
-- Use the file panel to add one or more PDF files for processing
-- Supports drag & drop and file dialog
+> **注意**：发布 Release 时请勿上传 models 文件夹，仅在 Release 页面或文档中提供上述下载链接和放置说明。
 
-### Parameter Configuration
-In the parameters panel, select:
-- **Camelot Mode**: Choose the extraction flavor (lattice, stream, network, hybrid)
-- **Export Format**: Choose CSV or JSON
-- **Pages**: Select all pages or specify custom page ranges (e.g., 1-3,5)
-- **Output Folder**: Select where results will be saved
+---
 
-### Processing
-1. Click "Start Processing" to begin
-2. The progress panel displays real-time status, logs, and file processing results
-3. If "Preview Detected Tables" is enabled, you can visually inspect detected tables page by page after processing
+## Project Overview (English)
+PDFDataExtractor is a tool for automatic table detection and structured export from PDF/images, supporting multiple detection models and parameter optimization, suitable for efficient processing of batch and complex documents.
 
-### Result Review
-- Extracted tables and annotated images are saved in the output folder
-- Organized by PDF name and type (data, debug, preview)
-- Use the Images tab to navigate through detected table previews
+## Key Features
+- Table detection and structured export for PDF/images
+- Supports Camelot, Table-Transformer and more
+- Visual preview of detection results
+- Configurable parameters, batch processing
+- Modern GUI with drag & drop, batch, custom parameters
+- Logging and error tracking for debugging and maintenance
 
-## Table Detection Logic
+## Quick Start
+```bash
+pip install -r requirements.txt
+python main.py
+```
 
-### Camelot vs. Transformer
-- **Camelot**: Highly effective for text-based PDFs with clear table lines. Provides detailed table structure and accuracy metrics
-- **Table-Transformer**: Robust for image-based or complex PDFs where Camelot may fail or be less accurate
+## Requirements
+- Python 3.10+
+- Main dependencies: Camelot, PyTorch, Transformers, PIL, PySide6, pdfplumber, pytesseract, etc.
 
-### Decision Strategy
-- Prefer Camelot results if accuracy is high and region matches transformer detection
-- If Camelot accuracy is low, attempt parameter optimization
-- Use transformer+OCR as fallback when necessary
-- Always deduplicate and supplement with unmatched high-accuracy Camelot tables
+## Model Files Notice
+This project requires large model files (e.g., Table-Transformer, Tesseract-OCR) which are NOT included in the GitHub repo or Release due to their size. Please download and place them manually as follows:
 
-## Advanced Features
-- **Thread-Safe Processing**: Each file is processed with isolated parameters for safe concurrent execution
-- **Dynamic Parameter Tuning**: Automatic adjustment of extraction parameters based on table structure and quality
-- **Comprehensive Logging**: Detailed logs and error tracking for debugging and performance monitoring
-- **Extensible Design**: Easily add new detection/extraction modules or customize parameter optimization
+- Table-Transformer: Download from [official repo](https://github.com/microsoft/table-transformer) or [HuggingFace](https://huggingface.co/microsoft/table-transformer).
+- Tesseract-OCR: Download from [Tesseract official](https://github.com/tesseract-ocr/tesseract) or [platform releases](https://github.com/tesseract-ocr/tesseract/wiki).
 
-## Typical Workflow
-1. Launch the app
-2. Add PDF files
-3. Set output folder and adjust parameters if needed
-4. Start processing
-5. Monitor progress and review results and previews
+Place the downloaded files in `models/table-transformer/` and `models/Tesseract-OCR/` under the project root:
 
-## Notes
-- For best results, use high-quality, non-encrypted PDFs
-- The system is designed for extensibility; you can add new detection/extraction modules or customize parameter optimization as needed
-- All output files are organized per PDF for easy management
+```
+PDFDataExtractor/
+├─ main.py
+├─ models/
+│  ├─ table-transformer/
+│  └─ Tesseract-OCR/
+```
 
-## More Information
-For further details, refer to the code documentation and comments within each module.
+> **Note**: Do NOT upload the models folder to GitHub or Release. Only provide download links and placement instructions in the Release page or documentation.
+
+## Typical Usage
+- Run the main program, select PDF or image, set parameters, and click "Start Processing"
+
+  ![Processing Flow Screenshot](docs/Images/PDF Table Extractor_processImage.png)
+
+- Results and preview images are saved in the output directory
+- You can preview detection results in the GUI
+
+  ![GUI Preview Screenshot](docs/Images/PDF Table Extractor_processpdf.png)
+
+## Contribution
+Issues and PRs are welcome! For development, please refer to docs/architecture.md and docs/implementation.md.
+
+## License
+MIT
