@@ -85,12 +85,12 @@ PDFDataExtractor/
 ## Typical Usage
 - Run the main program, select PDF or image, set parameters, and click "Start Processing"
 
-  ![Processing Flow Screenshot](docs/Images/PDF Table Extractor_processImage.png)
+  ![Processing Flow Screenshot](docs/Images/PDF%20Table%20Extractor_processImage.png)
 
 - Results and preview images are saved in the output directory
 - You can preview detection results in the GUI
 
-  ![GUI Preview Screenshot](docs/Images/PDF Table Extractor_processpdf.png)
+  ![GUI Preview Screenshot](docs/Images/PDF%20Table%20Extractor_processpdf.png)
 
 ## 界面操作演示 | GUI Operation Demo
 
