@@ -562,7 +562,6 @@ class TextProcessor(BaseProcessor):
                 self.logger.info("No detection results to visualize.")
                 return
 
-            
             self.logger.debug(f"Visualizing detection results for page {page_num} with {len(camelot_results)} Camelot tables and {len(transformer_results)} Transformer regions.")
             # Create a copy of the image for drawing
             draw_image = image.copy()
@@ -570,7 +569,7 @@ class TextProcessor(BaseProcessor):
             # Load font
             font = None
             try:
-                font = ImageFont.truetype("arial.ttf", 24)
+                font = ImageFont.truetype("arial.ttf", 26)
             except Exception:
                 font = ImageFont.load_default()
             # Draw Camelot results in blue
@@ -591,7 +590,9 @@ class TextProcessor(BaseProcessor):
                     acc = float(result.get('accuracy', 0))
                 except Exception:
                     acc = 0
-                draw.text((bbox[0], bbox[1] - 28), f"Camelot {idx+1} (acc: {acc:.2f})", fill='blue', font=font)
+                # Camelot: left-top对齐
+                text = f"Camelot {idx+1} (acc: {acc:.2f})"
+                draw.text((bbox[0], bbox[1] - 28), text, fill='blue', font=font)
             # Draw Transformer results in red
             for idx, result in enumerate(transformer_results):
                 bbox = result.get('bbox')
@@ -602,7 +603,9 @@ class TextProcessor(BaseProcessor):
                     conf = float(result.get('confidence', 0))
                 except Exception:
                     conf = 0
-                draw.text((bbox[0], bbox[1] - 28), f"Transformer {idx+1} (conf: {conf:.2f})", fill='red', font=font)
+                # Transformer: 左下角对齐
+                text = f"Transformer {idx+1} (conf: {conf:.2f})"
+                draw.text((bbox[0], bbox[3]), text, fill='red', font=font)
             filename = f"page{page_num}_detection.png"
             output_path = get_output_subpath(self.params, 'preview', filename=filename)
             # Save annotated image
