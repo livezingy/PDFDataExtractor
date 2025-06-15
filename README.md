@@ -4,6 +4,7 @@
 PDFDataExtractor 是一个面向 PDF/图片表格自动检测与结构化导出的工具，支持多种检测模型和参数优化，适用于批量、复杂文档的高效处理。
 
 PDFDataExtractor is a tool for automatic table detection and structured export from PDF/images, supporting multiple detection models and parameter optimization, suitable for efficient processing of batch and complex documents.
+ ![GUI Preview Screenshot](docs/Images/PDF%20Table%20Extractor_processpdf.png)
 
 ## 主要特性
 - 支持 PDF、图片的表格检测与结构化导出
@@ -38,8 +39,6 @@ PDFDataExtractor/
 │  ├─ table-transformer/
 │  └─ Tesseract-OCR/
 ```
-
-> **注意**：发布 Release 时请勿上传 models 文件夹，仅在 Release 页面或文档中提供上述下载链接和放置说明。
 
 ---
 
