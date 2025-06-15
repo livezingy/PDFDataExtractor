@@ -1,11 +1,11 @@
 # PDFDataExtractor
 
-## 项目简介 | Project Overview
+## 项目简介
 PDFDataExtractor 是一个面向 PDF/图片表格自动检测与结构化导出的工具，支持多种检测模型和参数优化，适用于批量、复杂文档的高效处理。
 
 PDFDataExtractor is a tool for automatic table detection and structured export from PDF/images, supporting multiple detection models and parameter optimization, suitable for efficient processing of batch and complex documents.
 
-## 主要特性 | Key Features
+## 主要特性
 - 支持 PDF、图片的表格检测与结构化导出
 - 支持 Camelot、Table-Transformer 等多种检测方式
 - 可视化检测结果预览
@@ -13,17 +13,17 @@ PDFDataExtractor is a tool for automatic table detection and structured export f
 - 现代化 GUI，支持拖拽、批量、参数自定义
 - 日志与错误追踪，便于调试和维护
 
-## 快速开始 | Quick Start
+## 快速开始
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
 
-## 依赖环境 | Requirements
+## 依赖环境
 - Python 3.10+
 - 主要依赖：Camelot, PyTorch, Transformers, PIL, PySide6, pdfplumber, pytesseract 等
 
-## 模型文件获取与放置说明 | Model Files Notice
+## 模型文件获取与放置说明
 本项目依赖较大的模型文件（如 Table-Transformer、Tesseract-OCR），请用户根据下述说明手动下载并放置：
 
 - Table-Transformer: 下载地址见 [官方仓库](https://github.com/microsoft/table-transformer) 或 [HuggingFace](https://huggingface.co/microsoft/table-transformer)。
@@ -43,7 +43,7 @@ PDFDataExtractor/
 
 ---
 
-## Project Overview (English)
+## Project Overview
 PDFDataExtractor is a tool for automatic table detection and structured export from PDF/images, supporting multiple detection models and parameter optimization, suitable for efficient processing of batch and complex documents.
 
 ## Key Features
@@ -80,7 +80,6 @@ PDFDataExtractor/
 │  └─ Tesseract-OCR/
 ```
 
-> **Note**: Do NOT upload the models folder to GitHub or Release. Only provide download links and placement instructions in the Release page or documentation.
 
 ## Typical Usage
 - Run the main program, select PDF or image, set parameters, and click "Start Processing"
