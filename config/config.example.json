@@ -1,0 +1,27 @@
+{
+    "ui": {
+        "export_format": "csv",
+        "output_path": "./output",
+        "pages": "all",
+        "camelot_accuracy_threshold": 0.6,
+        "detection_threshold": 0.5,
+        "structure_threshold": 0.5,
+        "structure_border_width": 5,
+        "structure_preprocess": true,
+        "table_method": "pdfplumber",
+        "table_flavor": null,
+        "table_score_threshold": 0.05,
+        "table_iou_threshold": 0.1,
+        "transformer_detection_threshold": 0.1,
+        "transformer_structure_threshold": 0.1,
+        "tesseract_threshold": 0.1,
+        "transformer_preprocess": false,
+        "detection_confidence_weight": 0.6,
+        "structure_confidence_weight": 0.4
+    },
+    "paths": {
+        "tesseract_path": "./models/Tesseract-OCR/tesseract.exe",
+        "model_base_path": "./models"
+    }
+}
+
