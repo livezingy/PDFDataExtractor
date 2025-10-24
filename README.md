@@ -18,7 +18,7 @@
 
 ## 📸 功能演示
 
-![GUI Screenshot](https://github.com/livezingy/PDFDataExtractor/tests/results/PDFTableExtractor.png)
+![GUI Screenshot](https://github.com/livezingy/PDFDataExtractor/tree/main/TestFiles/testSamples/PDFTableExtractor.png)
 
 *PDF Table Extractor 主界面*
 
