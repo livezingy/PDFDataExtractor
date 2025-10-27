@@ -58,13 +58,13 @@ PDF页面 → 检测文本量 →
 
 对于基于图像的PDF，系统使用Transformer+EasyOCR进行表格识别：
 
-![Cell Detection](https://github.com/livezingy/PDFDataExtractor/tree/main/TestFiles/testSamples/cell_detection_visualization.png)
+![Cell Detection](TestFiles/testSamples/cell_detection_visualization.png)
 *单元格检测可视化*
 
-![Special Labels](https://github.com/livezingy/PDFDataExtractor/tree/main/TestFiles/testSamples/special_labels_visualization.png)
+![Special Labels](TestFiles/testSamples/special_labels_visualization.png)
 *特殊标签识别*
 
-![Table Structure](https://github.com/livezingy/PDFDataExtractor/tree/main/TestFiles/testSamples/table_structure_visualization.png)
+![Table Structure](TestFiles/testSamples/table_structure_visualization.png)
 *表格结构识别*
 
 **处理流程**：
