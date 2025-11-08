@@ -11,7 +11,7 @@
 
 **无需安装，直接在浏览器中使用：**
 
-[![🚀 在线试用](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://pdfdataextractor.streamlit.app)
+[![🚀 在线试用](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://pdfdataextractorgit-tufkofxqh3d7wtq7pyg4xz.streamlit.app/)
 
 > ⚠️ **测试版本限制**：在线版本仅支持测试小文件（最大 10 MB），建议使用小型PDF文件进行测试。
 
