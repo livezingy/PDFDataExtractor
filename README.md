@@ -31,7 +31,7 @@
 
 ## 📸 功能演示
 
-![GUI Screenshot](tests/results/PDFTableExtractor.png)
+![GUI Screenshot](TestFiles/testSamples/PDFTableExtractor.png)
 
 *PDF Table Extractor 主界面*
 
