@@ -1,0 +1,147 @@
+# streamlit_app/streamlit_app.py
+# Streamlit应用主入口文件（示例）
+# 注意：这是示例文件，实际使用时请根据项目结构调整
+
+import streamlit as st
+import os
+import tempfile
+from pathlib import Path
+
+# 设置页面配置
+st.set_page_config(
+    page_title="PDF Table Extractor",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# 文件大小限制（10MB，用于测试小文件）
+MAX_FILE_SIZE_MB = 10
+MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024  # 转换为字节
+
+def check_file_size(file):
+    """检查文件大小是否符合限制"""
+    if file.size > MAX_FILE_SIZE:
+        file_size_mb = file.size / 1024 / 1024
+        st.error(
+            f"❌ 文件过大 ({file_size_mb:.2f} MB)\n\n"
+            f"当前版本仅支持测试小文件（最大 {MAX_FILE_SIZE_MB} MB）\n\n"
+            f"请上传较小的PDF文件进行测试。"
+        )
+        return False
+    return True
+
+def main():
+    st.title("📊 PDF Table Extractor")
+    st.markdown("---")
+    
+    # 侧边栏
+    with st.sidebar:
+        st.header("📁 文件上传")
+        uploaded_file = st.file_uploader(
+            "选择PDF文件",
+            type=["pdf"],
+            help=f"仅支持PDF文件，最大 {MAX_FILE_SIZE_MB} MB"
+        )
+        
+        # 显示文件大小限制提示
+        st.info(f"💡 **测试版本限制**\n\n最大文件大小: {MAX_FILE_SIZE_MB} MB")
+        
+        st.markdown("---")
+        
+        st.header("⚙️ 提取配置")
+        method = st.selectbox(
+            "提取方法",
+            ["PDFPlumber", "Camelot"],
+            help="选择表格提取方法"
+        )
+        
+        if method == "PDFPlumber":
+            flavor = st.selectbox(
+                "Flavor",
+                ["auto", "lines", "text"],
+                help="PDFPlumber提取模式"
+            )
+        elif method == "Camelot":
+            flavor = st.selectbox(
+                "Flavor",
+                ["auto", "lattice", "stream"],
+                help="Camelot提取模式"
+            )
+        
+        st.markdown("---")
+        
+        with st.expander("高级选项"):
+            score_threshold = st.slider(
+                "评分阈值",
+                0.0, 1.0, 0.6,
+                help="表格评分阈值，低于此值的表格将被过滤"
+            )
+        
+        st.markdown("---")
+        
+        # 显示项目信息
+        st.markdown("### 📚 项目信息")
+        st.markdown("""
+        - **GitHub**: [查看源码](https://github.com/livezingy/PDFDataExtractor)
+        - **文档**: [查看文档](https://github.com/livezingy/PDFDataExtractor/tree/main/docs)
+        """)
+    
+    # 主界面
+    if uploaded_file is not None:
+        # 检查文件大小
+        if not check_file_size(uploaded_file):
+            st.stop()
+        
+        # 显示文件信息
+        st.subheader("📄 文件信息")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("文件名", uploaded_file.name)
+        with col2:
+            file_size_mb = uploaded_file.size / 1024 / 1024
+            st.metric("文件大小", f"{file_size_mb:.2f} MB")
+        with col3:
+            st.metric("文件类型", "PDF")
+        
+        st.markdown("---")
+        
+        # 处理按钮
+        if st.button("🚀 开始提取", type="primary"):
+            with st.spinner("正在处理PDF文件..."):
+                # TODO: 调用实际的处理函数
+                # results = process_pdf_streamlit(uploaded_file, method, flavor, {...})
+                st.success("✅ 处理完成！")
+                
+                # 显示结果
+                st.subheader("📊 提取结果")
+                st.info("处理功能正在开发中...")
+    else:
+        # 欢迎界面
+        st.info("👈 请从左侧边栏上传PDF文件开始使用")
+        
+        st.markdown("""
+        ## 🎯 功能说明
+        
+        ### 支持的提取方法
+        
+        - **PDFPlumber**: 基于文本和线条的启发式提取
+          - `lines`: 适用于有框表格
+          - `text`: 适用于无框表格
+          - `auto`: 自动选择最佳模式
+        
+        - **Camelot**: 基于机器学习的结构提取
+          - `lattice`: 适用于有框表格
+          - `stream`: 适用于无框表格
+          - `auto`: 自动选择最佳模式
+        
+        ### ⚠️ 测试版本限制
+        
+        - 当前版本仅支持测试小文件（最大 10 MB）
+        - 部分功能可能受限（如Camelot需要系统依赖）
+        - 建议使用小型PDF文件进行测试
+        """)
+
+if __name__ == "__main__":
+    main()
+

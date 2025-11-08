@@ -3,8 +3,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PySide6](https://img.shields.io/badge/GUI-PySide6-green.svg)](https://pypi.org/project/PySide6/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-Cloud-FF4B4B?logo=streamlit&logoColor=white)](https://pdfdataextractor.streamlit.app)
 
 一个智能的PDF表格提取工具，支持基于文本的PDF和基于图像的PDF表格自动识别与提取。
+
+## 🌐 在线体验
+
+**无需安装，直接在浏览器中使用：**
+
+[![🚀 在线试用](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://pdfdataextractor.streamlit.app)
+
+> ⚠️ **测试版本限制**：在线版本仅支持测试小文件（最大 10 MB），建议使用小型PDF文件进行测试。
 
 ## 🚀 主要功能
 
@@ -13,12 +22,16 @@
   - 扫描PDF：使用Transformer+EasyOCR进行图像表格识别
 - **智能方法选择**：根据PDF特征自动选择最优提取策略
 - **自动参数计算**：基于页面特征自动计算最优参数
-- **可视化界面**：直观的GUI界面，支持批量处理
-- **多格式导出**：支持CSV、Excel等多种格式导出
+- **多种使用方式**：
+  - 🖥️ **桌面GUI**：直观的GUI界面，支持批量处理
+  - 🌐 **在线Web**：Streamlit Web应用，无需安装即可使用
+- **多格式导出**：
+  - 桌面GUI：支持CSV、JSON格式导出
+  - 在线Web：支持CSV、Excel格式导出
 
 ## 📸 功能演示
 
-![GUI Screenshot](TestFiles/testSamples/PDFTableExtractor.png)
+![GUI Screenshot](https://github.com/livezingy/PDFDataExtractor/raw/main/tests/results/PDFTableExtractor.png)
 
 *PDF Table Extractor 主界面*
 
@@ -51,20 +64,21 @@ PDF页面 → 检测文本量 →
    - 无框表格：使用Camelot stream或PDFPlumber text模式
 
 **技术文档**：
-- [Camelot参数计算原理](https://github.com/livezingy/PDFDataExtractor/blob/main/docs/camelot_parameter_calculation.md)
-- [PDFPlumber参数计算原理](https://github.com/livezingy/PDFDataExtractor/blob/main/docs/pdfplumber_parameter_calculation.md)
+- [Camelot库的表格提取机制](https://github.com/livezingy/PDFDataExtractor/blob/main/docs/camelot_table_extraction_guide.md)
+- [pdfplumber库的表格提取机制](https://github.com/livezingy/PDFDataExtractor/blob/main/docs/pdfplumber_table_extraction_guide.md)
+- [Camelot/PDFPlumber参数计算原理](https://github.com/livezingy/PDFDataExtractor/blob/main/docs/parameter_calculation_formulas.md)
 
 ### 3. 扫描PDF表格提取
 
 对于基于图像的PDF，系统使用Transformer+EasyOCR进行表格识别：
 
-![Cell Detection](TestFiles/testSamples/cell_detection_visualization.png)
+![Cell Detection](https://github.com/livezingy/PDFDataExtractor/raw/main/tests/results/cell_detection_visualization.png)
 *单元格检测可视化*
 
-![Special Labels](TestFiles/testSamples/special_labels_visualization.png)
+![Special Labels](https://github.com/livezingy/PDFDataExtractor/raw/main/tests/results/special_labels_visualization.png)
 *特殊标签识别*
 
-![Table Structure](TestFiles/testSamples/table_structure_visualization.png)
+![Table Structure](https://github.com/livezingy/PDFDataExtractor/raw/main/tests/results/table_structure_visualization.png)
 *表格结构识别*
 
 **处理流程**：

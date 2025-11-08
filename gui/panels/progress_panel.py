@@ -169,6 +169,8 @@ class ProgressPanel(QWidget):
         # Control row: Checkbox + button
         self.control_row = QWidget()
         self.chk_preview = QCheckBox("Preview Detected Tables")
+        # set chk_preview disable
+        self.chk_preview.setDisabled(True)
         
         # Horizontal layout
         h_layout = QHBoxLayout(self.control_row)

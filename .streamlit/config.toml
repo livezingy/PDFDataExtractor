@@ -1,0 +1,48 @@
+# Streamlit配置文件
+# 位置：.streamlit/config.toml
+
+[server]
+# 最大上传文件大小（MB）
+# Streamlit Cloud默认限制为200MB，这里设置为10MB用于测试小文件
+maxUploadSize = 10
+
+# 启用CORS
+enableCORS = false
+
+# 启用XSRF保护
+enableXsrfProtection = true
+
+# 端口配置（Streamlit Cloud会自动设置）
+port = 8501
+
+# 禁用文件监控以避免torch.classes检查导致的事件循环错误
+# 设置为 "none" 可以完全禁用文件监控，避免检查torch模块路径
+fileWatcherType = "none"
+
+[browser]
+# 是否在启动时自动打开浏览器（Streamlit Cloud中无效）
+gatherUsageStats = false
+
+[theme]
+# 主题配置
+primaryColor = "#1f77b4"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#262730"
+font = "sans serif"
+
+[runner]
+# 运行模式
+magicEnabled = true
+installTracer = false
+fastReruns = true
+
+[client]
+# 客户端配置
+showErrorDetails = true
+toolbarMode = "auto"
+
+[logger]
+# 日志级别
+level = "info"
+

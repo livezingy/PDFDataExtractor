@@ -33,6 +33,11 @@ class PageProcessor(BaseProcessor):
     def _is_scanned_pdf(self, pdfplumber_object, page_num: int) -> bool:
         """检测PDF页面是否为扫描文档
         
+        改进版：使用多维度综合判断
+        1. 文本密度（动态阈值）
+        2. 矢量对象数量
+        3. 最大图像占比
+        
         Args:
             pdfplumber_object: pdfplumber PDF对象
             page_num: 页面编号（从1开始）
@@ -42,16 +47,64 @@ class PageProcessor(BaseProcessor):
         """
         try:
             page = pdfplumber_object.pages[page_num - 1]
-            text = page.extract_text()
+            page_area = page.width * page.height
             
-            # 如果文本长度少于50个字符，认为是扫描PDF
-            if text is None or len(text.strip()) < 50:
-                return True
+            # ========== 检查1：文本密度（动态阈值） ==========
+            text = page.extract_text()
+            text_length = len(text.strip()) if text else 0
+            
+            # 动态阈值：基于页面面积计算
+            # A4页面(595x842)标准文本密度约0.002-0.006字符/平方点
+            min_text_threshold = max(30, page_area * 0.0005)
+            
+            if text_length < min_text_threshold:
+                # ========== 检查2：矢量对象数量 ==========
+                # 扫描PDF通常没有矢量对象
+                lines = page.lines if hasattr(page, 'lines') else []
+                rects = page.rects if hasattr(page, 'rects') else []
+                curves = page.curves if hasattr(page, 'curves') else []
+                
+                vector_count = len(lines) + len(rects) + len(curves)
+                
+                # 如果文本少且矢量对象也少，判定为扫描PDF
+                if vector_count < 10:
+                    self.logger.info(
+                        f"Page {page_num}: 扫描PDF (文本:{text_length:.0f}/{min_text_threshold:.0f}, "
+                        f"矢量对象:{vector_count})"
+                    )
+                    return True
+            
+            # ========== 检查3：最大图像占比 ==========
+            images = page.images if hasattr(page, 'images') else []
+            
+            if images:
+                # 使用max()找到面积最大的图像，O(n)复杂度
+                largest_image = max(
+                    images, 
+                    key=lambda img: abs(img.get('x1', 0) - img.get('x0', 0)) * 
+                                   abs(img.get('bottom', 0) - img.get('top', 0))
+                )
+                
+                # 计算最大图像的面积
+                largest_area = (
+                    abs(largest_image.get('x1', 0) - largest_image.get('x0', 0)) * 
+                    abs(largest_image.get('bottom', 0) - largest_image.get('top', 0))
+                )
+                
+                largest_ratio = largest_area / page_area if page_area > 0 else 0
+                
+                # 如果最大图像占比超过70%，判定为扫描PDF
+                if largest_ratio > 0.7:
+                    self.logger.info(
+                        f"Page {page_num}: 扫描PDF (最大图像占比 {largest_ratio:.1%}, "
+                        f"面积 {largest_area:.0f}/{page_area:.0f})"
+                    )
+                    return True
+            
             return False
             
         except Exception as e:
             self.logger.error(f"Error detecting scanned PDF for page {page_num}: {e}")
-            # 出错时默认认为是文本PDF
             return False
 
     async def _process_with_transformer(self, image, params):
@@ -144,7 +197,7 @@ class PageProcessor(BaseProcessor):
             else:
                 flavor = 'auto'  # 保持原值
             
-            self.logger.info(f"[PageProcessor] Auto模式：检测到{table_type}表格，选择{flavor}方法")
+            self.logger.info(f"[PageProcessor] Auto mode: detected {table_type} table, selected {flavor} method")
             
             # 调用标准处理
             return await self._process_with_method(page, method, flavor, params)
@@ -314,7 +367,7 @@ class PageProcessor(BaseProcessor):
                             # 3. 检测是否为扫描PDF
                             if self._is_scanned_pdf(pdfplumber_object, page_num):
                                 # 记录警告日志
-                                self.logger.warning(f"检测到扫描文档（页面{page_num}），自动使用Transformer提取，用户设定的方法无效")
+                                self.logger.warning(f"Detected scanned document (page {page_num}), automatically using Transformer extraction, user-specified method ignored")
                                 # 转换为图像并使用Transformer
                                 page_result = await self._process_page_as_scanned(page, page_params)
                             else:
@@ -379,216 +432,9 @@ class PageProcessor(BaseProcessor):
                 'pages': [],
                 'error': str(e)
             }
-
-
-    async def process_page(self, pdfplumber_object, page_num, params, table_processor):
-        """
-        Process a single page of the PDF document.
-        Extracts tables from image and text regions separately in current page.
-        table-transformer is used for image regions, traditional methods for text regions.
-        
-        Args:
-            pdfplumber_object: the object returned by pdfplumber.open()
-            page_num: the current page number (1-based)
-            params: processing parameters
-        Returns:
-            dict: {'image_tables': [...], 'text_tables': [...], 'success': True/False, 'error': ...}
-        """
-        import threading
-        results = {'image_tables': [], 'text_tables': [], 'success': True, 'error': ''}
-        try:            
-            page = pdfplumber_object.pages[page_num - 1]
-            page_without_images = page
-            # 1. extract all the images area (guard None)
-            images_attr = getattr(page, 'images', None)
-            images_list = images_attr if isinstance(images_attr, list) else []
-            if images_list:
-                image_bboxes = [(img['x0'], img['top'], img['x1'], img['bottom']) for img in images_list]
-                images = []
-                self.logger.debug(f"[process_page] found {len(image_bboxes)} image regions on page {page_num}")
-                for bbox in image_bboxes:
-                    cropped = page.within_bbox(bbox).to_image(resolution=300)
-                    pil_img = cropped.original
-                    images.append({'bbox': bbox, 'image': pil_img})
-                #此处的bbox是否有意义？？？
-                # 2. construct the page without images
-                
-                for bbox in image_bboxes:
-                    page_without_images = page_without_images.outside_bbox(bbox)
-                # 3. thread 1: process all image regions
-                async def process_images():
-                    img_params = params.copy()
-                    for img_info in images:
-                        img_params['image_bbox'] = img_info['bbox']
-                        try:
-                            table_parser = params.get('table_parser')
-                            if table_parser and hasattr(table_parser, 'parser_image'):
-                                try:
-                                    # 检查table_parser的models是否正确初始化
-                                    if not hasattr(table_parser, 'models') or table_parser.models is None:
-                                        self.logger.error("[PageProcessor] TableParser models not initialized for image region")
-                                        continue
-                                    img_res = await table_parser.parser_image(img_info['image'], params)
-                                    if img_res and isinstance(img_res, dict) and img_res.get('tables'):
-                                        results['image_tables'].extend(img_res['tables'])
-                                except Exception as e:
-                                    self.logger.error(f"[PageProcessor] Error processing image region: {str(e)}")
-                                    continue
-                            else:
-                                self.logger.warning("[PageProcessor] table_parser not available for image region processing")
-                        except Exception as e:
-                            self.logger.error(f"Image region table extraction failed: {str(e)}")
-
-                await process_images()
-            else:
-                images = []
-                self.logger.info(f"[process_page] No images found on page {page_num}, skipping image region processing.")
-
-
-            # 4. thread 1: process all text regions
-            def process_text():
-                try:
-                    # 使用传入的table_processor实例，避免重复创建
-                    if not table_processor:
-                        self.logger.error("TableProcessor instance is None.")
-                        return
-                    text_tables = table_processor.process_pdf_page(params.get('current_filepath'), page)
-                    if not text_tables:
-                        text_tables = []
-                    results['text_tables'] = text_tables
-                except Exception as e:
-                    self.logger.error(f"Text region table extraction failed: {str(e)}")
-
-            # Start the text processing thread
-            t1 = threading.Thread(target=process_text)
-            t1.start()
-            t1.join()
-            results['tables'] = []
-            results['tables'].extend(results.get('image_tables', []))
-            results['tables'].extend(results.get('text_tables', []))
-            
-            # Convert table format for export compatibility
-            tables = results.get('tables')
-            if tables is None:
-                tables = []
-            results['tables'] = self._convert_tables_for_export(tables)
-            return results
-        except Exception as e:
-            results['success'] = False
-            results['error'] = str(e)
-            self.logger.error(f"process_pdfplumber_page_with_images failed: {str(e)}")
-            import traceback
-            self.logger.debug(f"Full traceback: {traceback.format_exc()}")
-            return results
-
+ 
     
-    
-    def _visualize_detection_results(
-        self,
-        image: Image.Image,
-        camelot_results: List[Dict],
-        transformer_results: List[Dict],
-        page_num: int
-    ):
-        """Visualize detection results and save annotated image
-        
-        Args:
-            image: Input image
-            camelot_results: Camelot detection results
-            transformer_results: Transformer detection results
-            file_path: Original file path
-            page_num: Page number
-        """
-        try:
-            from PIL import ImageDraw, ImageFont
-            # check if image is valid
-            if image is None or not hasattr(image, 'copy'):
-                self.logger.error("Input image is None or invalid, cannot visualize detection results.")
-                return
-            # check if results are lists            
-            if not isinstance(camelot_results, list):
-                camelot_results = []
-            if not isinstance(transformer_results, list):
-                transformer_results = []
-            if not camelot_results and not transformer_results:
-                self.logger.info("No detection results to visualize.")
-                return
 
-            self.logger.debug(f"Visualizing detection results for page {page_num} with {len(camelot_results)} Camelot tables and {len(transformer_results)} Transformer regions.")
-            # Create a copy of the image for drawing
-            draw_image = image.copy()
-            draw = ImageDraw.Draw(draw_image)
-            # Load font
-            font = None
-            try:
-                font = ImageFont.truetype("arial.ttf", 26)
-            except Exception:
-                font = ImageFont.load_default()
-            # Draw Camelot results in blue
-            for idx, result in enumerate(camelot_results):
-                bbox = result.get('bbox')
-                if not bbox or len(bbox) != 4:
-                    continue
-                # Convert coordinates if needed
-                if 'pdf_size' in result:
-                    pdf_width, pdf_height = result['pdf_size']
-                    image_width, image_height = image.size
-                    x1, y2 = self.pdf_to_image_coords(bbox[0], bbox[1], image_width, image_height, pdf_width, pdf_height)
-                    x2, y1 = self.pdf_to_image_coords(bbox[2], bbox[3], image_width, image_height, pdf_width, pdf_height)
-                    bbox = [x1, y1, x2, y2]
-                    self.logger.debug(f"Camelot table {idx+1} converted bbox: {bbox}")
-                draw.rectangle(bbox, outline='blue', width=3)
-                try:
-                    acc = float(result.get('accuracy', 0))
-                except Exception:
-                    acc = 0
-                # Camelot: left-top对齐
-                text = f"Camelot {idx+1} (acc: {acc:.2f})"
-                draw.text((bbox[0], bbox[1] - 28), text, fill='blue', font=font)
-            # Draw Transformer results in red
-            for idx, result in enumerate(transformer_results):
-                bbox = result.get('bbox')
-                if not bbox or len(bbox) != 4:
-                    continue
-                draw.rectangle(bbox, outline='red', width=3)
-                try:
-                    conf = float(result.get('confidence', 0))
-                except Exception:
-                    conf = 0
-                # Transformer: 左下角对齐
-                text = f"Transformer {idx+1} (conf: {conf:.2f})"
-                draw.text((bbox[0], bbox[3]), text, fill='red', font=font)
-            filename = f"page{page_num}_detection.png"
-            output_path = get_output_subpath(self.params, 'preview', filename=filename)
-            # Save annotated image
-            draw_image.save(output_path)
-            self.logger.info(f"Saved detection visualization to: {output_path}")
-        except Exception as e:
-            self.logger.error(f"Failed to visualize detection results: {str(e)}", exc_info=True)
-
-
-    def get_coordinate_transformers(self, pdf_image, pdf_width, pdf_height):
-        image_width, image_height = pdf_image.size
-        
-        image_scalers = (
-            image_width / float(pdf_width),
-            image_height / float(pdf_height)
-        )
-        
-        pdf_scalers = (
-            pdf_width / float(image_width),
-            pdf_height / float(image_height)
-        )        
-        return image_scalers, pdf_scalers
-    
-        
-    def pdf_to_image_coords(self, x, y, image_width, image_height, pdf_width, pdf_height):
-        """Convert PDF coordinates to image coordinates using explicit image/pdf size."""
-        scale_x = image_width / float(pdf_width)
-        scale_y = image_height / float(pdf_height)
-        img_x = int(x * scale_x)
-        img_y = int(abs(y - pdf_height) * scale_y)
-        return img_x, img_y
 
     def _save_pdf_images(self, pdf_path: str, params: Dict[str, Any]) -> None:
         """Save images from PDF to output/images/filename/ folder
@@ -686,72 +532,7 @@ class PageProcessor(BaseProcessor):
         except Exception as e:
             self.logger.error(f"Failed to save PDF images: {str(e)}", exc_info=True)
 
-    def _convert_tables_for_export(self, tables: List[Dict]) -> List[Dict]:
-        """Convert table data to export-compatible format
-        
-        Args:
-            tables: List of tables in various formats
-            
-        Returns:
-            List of tables in export-compatible format with 'data' and 'columns' keys
-        """
-        converted_tables = []
-        
-        for table in tables:
-            try:
-                # Skip if already in correct format
-                if isinstance(table, dict) and 'data' in table and 'columns' in table:
-                    converted_tables.append(table)
-                    continue
-                
-                # Convert table processor format
-                if isinstance(table, dict) and 'table' in table:
-                    table_obj = table['table']
-                    
-                    # Handle different table object types
-                    if hasattr(table_obj, 'df'):  # Camelot table
-                        df = table_obj.df
-                        converted_table = {
-                            'data': df.to_dict('records'),
-                            'columns': df.columns.tolist(),
-                            'confidence': table.get('score', 0.0),
-                            'bbox': table.get('bbox', []),
-                            'page': table.get('page', 0),
-                            'source': table.get('source', 'unknown')
-                        }
-                        converted_tables.append(converted_table)
-                        
-                    elif hasattr(table_obj, 'to_dict'):  # PDFPlumber table wrapper
-                        try:
-                            # Try to convert to DataFrame first
-                            import pandas as pd
-                            df = pd.DataFrame(table_obj.to_dict('records'))
-                            converted_table = {
-                                'data': df.to_dict('records'),
-                                'columns': df.columns.tolist(),
-                                'confidence': table.get('score', 0.0),
-                                'bbox': table.get('bbox', []),
-                                'page': table.get('page', 0),
-                                'source': table.get('source', 'unknown')
-                            }
-                            converted_tables.append(converted_table)
-                        except Exception as e:
-                            self.logger.warning(f"Failed to convert table to DataFrame: {str(e)}")
-                            continue
-                            
-                    else:
-                        self.logger.warning(f"Unknown table object type: {type(table_obj)}")
-                        continue
-                        
-                else:
-                    self.logger.warning(f"Unknown table format: {type(table)}")
-                    continue
-                    
-            except Exception as e:
-                self.logger.error(f"Failed to convert table: {str(e)}")
-                continue
-                
-        return converted_tables
+    
 
 
 
