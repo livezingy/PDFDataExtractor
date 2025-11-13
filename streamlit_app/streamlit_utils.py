@@ -51,8 +51,13 @@ except RuntimeError as e:
 # 导入logging模块
 import logging
 
-# 移除PageProcessor的导入，因为Streamlit不使用它
-# from core.processing.page_processor import PageProcessor
+# 为图片处理引入模型与解析器（按需）
+try:
+    from core.models.table_parser import TableParser
+    from core.utils.config import Config as AppConfig
+except Exception:
+    TableParser = None
+    AppConfig = None
 
 # 文件大小限制（10MB，用于测试小文件）
 MAX_FILE_SIZE_MB = 10
@@ -171,13 +176,69 @@ def process_pdf_streamlit(
         params['table_method'] = method
         params['table_flavor'] = flavor
         
-        # 3. 打开PDF文件
+        # 3. 根据文件类型分支处理
+        ext = os.path.splitext(pdf_path)[1].lower()
+
+        # ========= 3A. 处理图片文件：使用与GUI一致的Transformer流程 =========
+        if ext in ['.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff']:
+            results['detection_steps'].append({
+                'step': 2,
+                'name': 'Image Detected',
+                'status': 'info',
+                'message': 'Image file detected. Using Transformer pipeline (same as GUI)'
+            })
+
+            try:
+                from PIL import Image
+                image = Image.open(pdf_path)
+                if image.mode != "RGB":
+                    image = image.convert("RGB")
+
+                # 初始化 TableParser（与 GUI 保持一致的配置来源）
+                app_cfg = AppConfig().DEFAULT_CONFIG if AppConfig else {}
+                table_parser = TableParser(app_cfg) if TableParser else None
+                if not table_parser:
+                    raise RuntimeError("TableParser not available")
+
+                # 运行检测与解析
+                parsing = asyncio.run(table_parser.parser_image(image, params))
+
+                # 规范化结果
+                extracted = parsing.get('tables', []) if isinstance(parsing, dict) else []
+                results['detection_steps'].append({
+                    'step': 3,
+                    'name': 'Transformer Processing',
+                    'status': 'success' if parsing.get('success', True) else 'error',
+                    'message': f"Transformer parsed {len(extracted)} table(s)"
+                })
+
+                # 转换为Streamlit显示格式
+                results['extracted_tables'] = format_tables_for_streamlit(extracted)
+
+                # 记录参数信息（方法固定为transformer）
+                results['extraction_params'] = {
+                    'method': 'transformer',
+                    'flavor': None
+                }
+
+                return results
+            except Exception as e:
+                logger.error(f"[Streamlit] Image processing failed: {e}", exc_info=True)
+                results['detection_steps'].append({
+                    'step': 3,
+                    'name': 'Transformer Processing',
+                    'status': 'error',
+                    'message': f'Processing failed: {str(e)}'
+                })
+                return results
+
+        # ========= 3B. 处理PDF文件（原流程） =========
         with pdfplumber.open(pdf_path) as pdf:
             results['file_info']['total_pages'] = len(pdf.pages)
             
             # 添加检测步骤
             results['detection_steps'].append({
-                'step': 1,
+                'step': 2,
                 'name': 'File Loading',
                 'status': 'success',
                 'message': f'Successfully loaded PDF file with {len(pdf.pages)} page(s)'
@@ -386,17 +447,17 @@ def process_pdf_streamlit(
                         'message': f'Processing failed: {error_msg}'
                     })
         
-        # 5. 格式化表格结果
-        results['extracted_tables'] = format_tables_for_streamlit(all_tables)
-        
-        # 6. 添加最终统计
-        step_counter += 1
-        results['detection_steps'].append({
-            'step': step_counter,
-            'name': 'Processing Complete',
-            'status': 'success',
-            'message': f'Total extracted: {len(all_tables)} table(s)'
-        })
+            # 5. 格式化表格结果
+            results['extracted_tables'] = format_tables_for_streamlit(all_tables)
+            
+            # 6. 添加最终统计
+            step_counter += 1
+            results['detection_steps'].append({
+                'step': step_counter,
+                'name': 'Processing Complete',
+                'status': 'success',
+                'message': f'Total extracted: {len(all_tables)} table(s)'
+            })
         
     except Exception as e:
         logger.error(f"[Streamlit] PDF processing failed: {e}")

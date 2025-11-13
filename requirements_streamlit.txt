@@ -17,6 +17,9 @@ scipy>=1.10.0
 Pillow>=10.0.0
 opencv-python>=4.8.0
 
+# OCR（自动下载模型：若本地未提供则EasyOCR会下载所需权重）
+easyocr>=1.7.0
+
 # 可选：Camelot（如果Streamlit Cloud环境支持）
 # 注意：Camelot需要ghostscript和tesseract系统依赖
 # 在Streamlit Cloud中可能不可用，需要降级处理

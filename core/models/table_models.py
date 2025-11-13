@@ -90,24 +90,45 @@ class TableModels:
 
     def _init(self):
         try:
-            # Detection model - 强制使用本地模型，禁止自动下载
-            self.models['detection'] = TableTransformerForObjectDetection.from_pretrained(
-                self.detection_model_path,
-                local_files_only=True
-            ).to(self.device)
-            self.processors['detection'] = AutoImageProcessor.from_pretrained(
-                self.detection_model_path,
-                local_files_only=True
-            )
-            # Structure model - 强制使用本地模型，禁止自动下载
-            self.models['structure'] = TableTransformerForObjectDetection.from_pretrained(
-                self.structure_model_path,
-                local_files_only=True
-            ).to(self.device)
-            self.processors['structure'] = AutoImageProcessor.from_pretrained(
-                self.structure_model_path,
-                local_files_only=True
-            )
+            # Helper to resolve HF model id when local path is unavailable
+            def _resolve_model_id(local_path: str, kind: str) -> str:
+                # 默认映射：detection / structure
+                if kind == 'detection':
+                    return "microsoft/table-transformer-detection"
+                return "microsoft/table-transformer-structure-recognition"
+
+            def _load_model_and_processor(path_or_id: str, kind: str):
+                # 优先尝试本地文件
+                try:
+                    model = TableTransformerForObjectDetection.from_pretrained(
+                        path_or_id,
+                        local_files_only=True
+                    ).to(self.device)
+                    processor = AutoImageProcessor.from_pretrained(
+                        path_or_id,
+                        local_files_only=True
+                    )
+                    self.logger.info(f"[TableModels] Loaded {kind} from local path: {path_or_id}")
+                    return model, processor
+                except Exception as e_local:
+                    self.logger.warning(f"[TableModels] Local {kind} not found at {path_or_id}, fallback to Hugging Face Hub. Reason: {e_local}")
+                    # 回落到 Hugging Face Hub
+                    model_id = _resolve_model_id(path_or_id, kind)
+                    model = TableTransformerForObjectDetection.from_pretrained(model_id).to(self.device)
+                    processor = AutoImageProcessor.from_pretrained(model_id)
+                    self.logger.info(f"[TableModels] Downloaded {kind} model from HF Hub: {model_id}")
+                    return model, processor
+
+            # Detection model
+            det_model, det_proc = _load_model_and_processor(self.detection_model_path, 'detection')
+            self.models['detection'] = det_model
+            self.processors['detection'] = det_proc
+
+            # Structure model
+            str_model, str_proc = _load_model_and_processor(self.structure_model_path, 'structure')
+            self.models['structure'] = str_model
+            self.processors['structure'] = str_proc
+
             # Set eval mode
             for model in self.models.values():
                 model.eval()

@@ -29,9 +29,9 @@ def render_sidebar() -> dict:
         
         st.header("📁 File Upload")
         uploaded_file = st.file_uploader(
-            "Select PDF File",
-            type=["pdf"],
-            help=f"PDF files only, maximum {MAX_FILE_SIZE_MB} MB"
+            "Select PDF or Image File",
+            type=["pdf", "png", "jpg", "jpeg", "bmp", "tif", "tiff"],
+            help=f"PDF or Image files, maximum {MAX_FILE_SIZE_MB} MB"
         )
         
         # Display file size limit notice
@@ -45,7 +45,7 @@ def render_sidebar() -> dict:
         method = st.selectbox(
             "Extraction Method",
             ["PDFPlumber", "Camelot"],
-            help="Select table extraction method"
+            help="Select table extraction method (Image files will be processed with Transformer automatically)"
         )
         
         # Flavor selection (changes dynamically based on method)
