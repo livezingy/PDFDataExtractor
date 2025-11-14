@@ -17,22 +17,19 @@ scipy>=1.10.0
 Pillow>=10.0.0
 opencv-python-headless>=4.8.0
 
-# OCR（自动下载模型：若本地未提供则EasyOCR会下载所需权重）
-easyocr>=1.7.0
-
 # 可选：Camelot（如果Streamlit Cloud环境支持）
 # 注意：Camelot需要ghostscript和tesseract系统依赖
 # 在Streamlit Cloud中可能不可用，需要降级处理
-# camelot-py>=0.11.0
+camelot-py>=0.11.0
 
 # 可选：深度学习模型（如果需要Transformer功能）
 # 注意：模型文件较大，可能需要从外部存储加载
-# torch>=2.0.0
-# torchvision>=0.15.0
-# transformers>=4.30.0
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.30.0
 
 # 可选：OCR（如果需要）
-# easyocr>=1.7.0
+easyocr>=1.7.0
 # pytesseract>=0.3.10
 
 # 工具库
