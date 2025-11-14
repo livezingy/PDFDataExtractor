@@ -186,7 +186,7 @@ def sidebar_quick_check():
 
 def main():
     """Main function"""
-    detailed_diagnosis()
+    # detailed_diagnosis()
     # Initialize session_state
     if 'processing_state' not in st.session_state:
         st.session_state.processing_state = {
