@@ -27,6 +27,8 @@ camelot-py>=0.11.0
 torch>=2.0.0
 torchvision>=0.15.0
 transformers>=4.30.0
+timm>=0.6.0
+huggingface-hub>=0.16.0
 
 # 可选：OCR（如果需要）
 easyocr>=1.7.0
