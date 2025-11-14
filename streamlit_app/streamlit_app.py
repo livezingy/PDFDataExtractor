@@ -96,8 +96,97 @@ def check_file_size(file):
         return False
     return True
 
+# 在您的 Streamlit 应用中添加这个诊断部分
+import streamlit as st
+import sys
+import subprocess
+import pkg_resources
+
+def detailed_diagnosis():
+    st.header("详细环境诊断")
+    
+    # 1. 检查 Python 路径和版本
+    st.subheader("Python 环境")
+    st.write(f"Python 可执行文件: {sys.executable}")
+    st.write(f"Python 版本: {sys.version}")
+    st.write(f"路径: {sys.path}")
+    
+    # 2. 检查所有已安装的包
+    st.subheader("所有已安装的包")
+    installed_packages = {pkg.key: pkg.version for pkg in pkg_resources.working_set}
+    
+    # 查找所有计算机视觉相关的包
+    cv_related = {}
+    for pkg, version in installed_packages.items():
+        if any(keyword in pkg.lower() for keyword in ['cv', 'opencv', 'vision', 'image']):
+            cv_related[pkg] = version
+    
+    if cv_related:
+        st.write("计算机视觉相关包:")
+        for pkg, version in cv_related.items():
+            st.write(f"- {pkg}: {version}")
+    else:
+        st.warning("未找到明显的计算机视觉相关包")
+    
+    # 3. 专门检查 OpenCV
+    st.subheader("OpenCV 详细检查")
+    try:
+        import cv2
+        st.success(f"✅ OpenCV 导入成功")
+        st.write(f"版本: {cv2.__version__}")
+        st.write(f"文件路径: {cv2.__file__}")
+        
+        # 检查构建信息
+        try:
+            build_info = cv2.getBuildInformation()
+            st.write("构建信息（前500字符）:")
+            st.text(build_info[:500] + "..." if len(build_info) > 500 else build_info)
+        except:
+            st.write("无法获取构建信息")
+            
+    except ImportError as e:
+        st.error(f"❌ OpenCV 导入失败: {e}")
+        
+    # 4. 检查 camelot
+    st.subheader("Camelot 检查")
+    try:
+        import camelot
+        st.success(f"✅ Camelot 导入成功 - 版本: {camelot.__version__}")
+    except ImportError as e:
+        st.error(f"❌ Camelot 导入失败: {e}")
+    except Exception as e:
+        st.error(f"❌ Camelot 检查出错: {e}")
+
+# 在侧边栏添加快速诊断
+def sidebar_quick_check():
+    st.sidebar.header("快速检查")
+    
+    # OpenCV 检查
+    try:
+        import cv2
+        st.sidebar.success(f"OpenCV: {cv2.__version__}")
+        
+        # 检查是否是 headless
+        if 'headless' in cv2.__file__.lower():
+            st.sidebar.success("Headless 版本")
+        else:
+            st.sidebar.warning("可能是 GUI 版本")
+            
+    except ImportError as e:
+        st.sidebar.error(f"OpenCV 失败: {e}")
+    
+    # Camelot 检查
+    try:
+        import camelot
+        st.sidebar.success(f"Camelot: {camelot.__version__}")
+    except Exception as e:
+        st.sidebar.error(f"Camelot 失败: {e}")
+
+
+
 def main():
     """Main function"""
+    detailed_diagnosis()
     # Initialize session_state
     if 'processing_state' not in st.session_state:
         st.session_state.processing_state = {
