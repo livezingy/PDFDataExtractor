@@ -281,10 +281,16 @@ def get_default_pdfplumber_params() -> Dict[str, Any]:
 
 def get_default_camelot_lattice_params() -> Dict[str, Any]:
     """Get default Camelot Lattice parameters"""
-    return {key: def_['default'] for key, def_ in CAMELOT_LATTICE_PARAM_DEFS.items()}
+    params = {key: def_['default'] for key, def_ in CAMELOT_LATTICE_PARAM_DEFS.items()}
+    # 必须包含flavor参数，确保使用正确的模式
+    params['flavor'] = 'lattice'
+    return params
 
 
 def get_default_camelot_stream_params() -> Dict[str, Any]:
     """Get default Camelot Stream parameters"""
-    return {key: def_['default'] for key, def_ in CAMELOT_STREAM_PARAM_DEFS.items()}
+    params = {key: def_['default'] for key, def_ in CAMELOT_STREAM_PARAM_DEFS.items()}
+    # 必须包含flavor参数，否则Camelot可能默认使用lattice模式
+    params['flavor'] = 'stream'
+    return params
 

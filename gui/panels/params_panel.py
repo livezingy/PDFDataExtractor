@@ -117,8 +117,8 @@ class ParamsPanel(QWidget):
         self.camelot_flavor_label = QLabel("Flavor:")
         self.camelot_flavor_combo = QComboBox()
         set_control_height(self.camelot_flavor_combo)
-        self.camelot_flavor_combo.addItems(["Lattice", "Stream"])
-        self.camelot_flavor_combo.setCurrentIndex(0)
+        self.camelot_flavor_combo.addItems(["Auto", "Lattice", "Stream"])
+        self.camelot_flavor_combo.setCurrentIndex(0)  # Default to Auto
         self.camelot_flavor_combo.setToolTip("Extraction flavor. Camelot: lattice/stream.")
         self.camelot_flavor_label.setToolTip(self.camelot_flavor_combo.toolTip())
         first_row_layout.addWidget(self.camelot_flavor_label)
@@ -168,8 +168,8 @@ class ParamsPanel(QWidget):
         self.pdfplumber_flavor_label = QLabel("Flavor:")
         self.pdfplumber_flavor_combo = QComboBox()
         set_control_height(self.pdfplumber_flavor_combo)
-        self.pdfplumber_flavor_combo.addItems(["Lines", "Text"])
-        self.pdfplumber_flavor_combo.setCurrentIndex(0)
+        self.pdfplumber_flavor_combo.addItems(["Auto", "Lines", "Text"])
+        self.pdfplumber_flavor_combo.setCurrentIndex(0)  # Default to Auto
         self.pdfplumber_flavor_combo.setToolTip("Extraction flavor. PDFPlumber: lines/text.")
         self.pdfplumber_flavor_label.setToolTip(self.pdfplumber_flavor_combo.toolTip())
         first_row_layout.addWidget(self.pdfplumber_flavor_label)
@@ -338,6 +338,10 @@ class ParamsPanel(QWidget):
 
         # 手动调用一次_update_params以确保参数同步
         self._update_params()
+        
+        # 初始化参数模式combo的状态（根据初始flavor）
+        self._update_camelot_param_mode_combo_state()
+        self._update_pdfplumber_param_mode_combo_state()
     
     def _update_camelot_flavor_options(self, block_signals=False):
         """Update Camelot flavor options without triggering update_params"""
@@ -396,32 +400,41 @@ class ParamsPanel(QWidget):
         # Camelot tab parameters
         camelot_param_config = self.camelot_param_config_widget.get_params()
         camelot_flavor = self.camelot_flavor_combo.currentText().lower()
+        # Ensure flavor is always set
+        if not camelot_flavor:
+            camelot_flavor = 'auto'
         params_update['camelot_flavor'] = camelot_flavor
-        if camelot_flavor == 'lattice':
-            params_update['camelot_lattice_param_mode'] = camelot_param_config['mode']
-            if camelot_param_config['mode'] == 'custom':
-                params_update['camelot_lattice_custom_params'] = camelot_param_config['params']
-        elif camelot_flavor == 'stream':
-            params_update['camelot_stream_param_mode'] = camelot_param_config['mode']
-            if camelot_param_config['mode'] == 'custom':
-                params_update['camelot_stream_custom_params'] = camelot_param_config['params']
+        # Only collect custom params if flavor is not auto and mode is custom
+        if camelot_flavor != 'auto':
+            if camelot_flavor == 'lattice':
+                params_update['camelot_lattice_param_mode'] = camelot_param_config['mode']
+                if camelot_param_config['mode'] == 'custom':
+                    params_update['camelot_lattice_custom_params'] = camelot_param_config['params']
+            elif camelot_flavor == 'stream':
+                params_update['camelot_stream_param_mode'] = camelot_param_config['mode']
+                if camelot_param_config['mode'] == 'custom':
+                    params_update['camelot_stream_custom_params'] = camelot_param_config['params']
         
         # PDFPlumber tab parameters
         pdfplumber_param_config = self.pdfplumber_param_config_widget.get_params()
         pdfplumber_flavor = self.pdfplumber_flavor_combo.currentText().lower()
+        # Ensure flavor is always set
+        if not pdfplumber_flavor:
+            pdfplumber_flavor = 'auto'
         params_update['pdfplumber_flavor'] = pdfplumber_flavor
         params_update['pdfplumber_param_mode'] = pdfplumber_param_config['mode']
-        if pdfplumber_param_config['mode'] == 'custom':
+        # Only collect custom params if flavor is not auto and mode is custom
+        if pdfplumber_param_config['mode'] == 'custom' and pdfplumber_flavor != 'auto':
             params_update['pdfplumber_custom_params'] = pdfplumber_param_config['params']
         
         # According to table_method, set table_flavor for processing
         # Only the active tab's flavor is used in the processing workflow
         if table_method == 'camelot':
-            # Use Camelot tab flavor for processing
-            params_update['table_flavor'] = camelot_flavor
+            # Use Camelot tab flavor for processing (convert 'auto' to None)
+            params_update['table_flavor'] = None if camelot_flavor == 'auto' else camelot_flavor
         elif table_method == 'pdfplumber':
-            # Use PDFPlumber tab flavor for processing
-            params_update['table_flavor'] = pdfplumber_flavor
+            # Use PDFPlumber tab flavor for processing (convert 'auto' to None)
+            params_update['table_flavor'] = None if pdfplumber_flavor == 'auto' else pdfplumber_flavor
         elif table_method == 'transformer':
             # Transformer doesn't use table_flavor
             params_update['table_flavor'] = None
@@ -434,8 +447,46 @@ class ParamsPanel(QWidget):
     
     def _on_camelot_flavor_changed(self):
         """Handle Camelot flavor change"""
-        flavor = self.camelot_flavor_combo.currentText().lower()
+        new_flavor = self.camelot_flavor_combo.currentText().lower()
+        # Initialize last_flavor if not exists
+        if not hasattr(self, '_last_camelot_flavor'):
+            self._last_camelot_flavor = new_flavor
+        old_flavor = self._last_camelot_flavor
+        
+        # Check if we need to show warning (switching from non-auto to auto, or vice versa, in Custom mode)
+        if old_flavor is not None and old_flavor != new_flavor:
+            current_mode = self.camelot_param_mode_combo.currentText().lower()
+            if current_mode == 'custom':
+                # Check if there are custom parameters
+                current_params = self.camelot_param_config_widget.get_params()
+                if current_params.get('params'):
+                    from PySide6.QtWidgets import QMessageBox
+                    reply = QMessageBox.question(
+                        self,
+                        "Flavor Change Warning",
+                        f"Changing flavor from '{old_flavor}' to '{new_flavor}' will reset your custom parameters.\n\n"
+                        "Do you want to continue?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
+                    )
+                    if reply == QMessageBox.No:
+                        # Revert flavor selection
+                        self.camelot_flavor_combo.blockSignals(True)
+                        if old_flavor == 'auto':
+                            self.camelot_flavor_combo.setCurrentIndex(0)
+                        elif old_flavor == 'lattice':
+                            self.camelot_flavor_combo.setCurrentIndex(1)
+                        elif old_flavor == 'stream':
+                            self.camelot_flavor_combo.setCurrentIndex(2)
+                        self.camelot_flavor_combo.blockSignals(False)
+                        return
+        
+        self._last_camelot_flavor = new_flavor
+        flavor = new_flavor if new_flavor != 'auto' else None
         self.camelot_param_config_widget.set_method('camelot', flavor)
+        
+        # Update parameter mode combo state (disable Custom if flavor is auto)
+        self._update_camelot_param_mode_combo_state()
         
         # Sync parameter mode combo with widget
         self._sync_camelot_param_mode_combo()
@@ -444,8 +495,46 @@ class ParamsPanel(QWidget):
     
     def _on_pdfplumber_flavor_changed(self):
         """Handle PDFPlumber flavor change"""
-        flavor = self.pdfplumber_flavor_combo.currentText().lower()
+        new_flavor = self.pdfplumber_flavor_combo.currentText().lower()
+        # Initialize last_flavor if not exists
+        if not hasattr(self, '_last_pdfplumber_flavor'):
+            self._last_pdfplumber_flavor = new_flavor
+        old_flavor = self._last_pdfplumber_flavor
+        
+        # Check if we need to show warning (switching from non-auto to auto, or vice versa, in Custom mode)
+        if old_flavor is not None and old_flavor != new_flavor:
+            current_mode = self.pdfplumber_param_mode_combo.currentText().lower()
+            if current_mode == 'custom':
+                # Check if there are custom parameters
+                current_params = self.pdfplumber_param_config_widget.get_params()
+                if current_params.get('params'):
+                    from PySide6.QtWidgets import QMessageBox
+                    reply = QMessageBox.question(
+                        self,
+                        "Flavor Change Warning",
+                        f"Changing flavor from '{old_flavor}' to '{new_flavor}' will reset your custom parameters.\n\n"
+                        "Do you want to continue?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
+                    )
+                    if reply == QMessageBox.No:
+                        # Revert flavor selection
+                        self.pdfplumber_flavor_combo.blockSignals(True)
+                        if old_flavor == 'auto':
+                            self.pdfplumber_flavor_combo.setCurrentIndex(0)
+                        elif old_flavor == 'lines':
+                            self.pdfplumber_flavor_combo.setCurrentIndex(1)
+                        elif old_flavor == 'text':
+                            self.pdfplumber_flavor_combo.setCurrentIndex(2)
+                        self.pdfplumber_flavor_combo.blockSignals(False)
+                        return
+        
+        self._last_pdfplumber_flavor = new_flavor
+        flavor = new_flavor if new_flavor != 'auto' else None
         self.pdfplumber_param_config_widget.set_method('pdfplumber', flavor)
+        
+        # Update parameter mode combo state (disable Custom if flavor is auto)
+        self._update_pdfplumber_param_mode_combo_state()
         
         # Sync parameter mode combo with widget
         self._sync_pdfplumber_param_mode_combo()
@@ -473,6 +562,66 @@ class ParamsPanel(QWidget):
         # and sync back to param_mode_combo, but we block signals in _sync_pdfplumber_param_mode_combo
         self.pdfplumber_param_config_widget.set_params(mode.lower(), current_params.get('params', {}))
         # _update_params will be called by _on_pdfplumber_param_config_changed
+    
+    def _update_camelot_param_mode_combo_state(self):
+        """Update Camelot parameter mode combo state based on flavor"""
+        flavor = self.camelot_flavor_combo.currentText().lower()
+        current_mode = self.camelot_param_mode_combo.currentText().lower()
+        
+        # Disable Custom option if flavor is auto
+        if flavor == 'auto':
+            # Get the model to modify items
+            model = self.camelot_param_mode_combo.model()
+            custom_index = self.camelot_param_mode_combo.findText("Custom", Qt.MatchFixedString)
+            if custom_index >= 0:
+                # Disable Custom option
+                item = model.item(custom_index)
+                item.setEnabled(False)
+                
+                # If currently in Custom mode, switch to Auto
+                if current_mode == 'custom':
+                    self.camelot_param_mode_combo.blockSignals(True)
+                    self.camelot_param_mode_combo.setCurrentIndex(1)  # Auto
+                    self.camelot_param_mode_combo.blockSignals(False)
+                    # Update widget
+                    self.camelot_param_config_widget.set_params('auto', {})
+        else:
+            # Enable Custom option
+            model = self.camelot_param_mode_combo.model()
+            custom_index = self.camelot_param_mode_combo.findText("Custom", Qt.MatchFixedString)
+            if custom_index >= 0:
+                item = model.item(custom_index)
+                item.setEnabled(True)
+    
+    def _update_pdfplumber_param_mode_combo_state(self):
+        """Update PDFPlumber parameter mode combo state based on flavor"""
+        flavor = self.pdfplumber_flavor_combo.currentText().lower()
+        current_mode = self.pdfplumber_param_mode_combo.currentText().lower()
+        
+        # Disable Custom option if flavor is auto
+        if flavor == 'auto':
+            # Get the model to modify items
+            model = self.pdfplumber_param_mode_combo.model()
+            custom_index = self.pdfplumber_param_mode_combo.findText("Custom", Qt.MatchFixedString)
+            if custom_index >= 0:
+                # Disable Custom option
+                item = model.item(custom_index)
+                item.setEnabled(False)
+                
+                # If currently in Custom mode, switch to Auto
+                if current_mode == 'custom':
+                    self.pdfplumber_param_mode_combo.blockSignals(True)
+                    self.pdfplumber_param_mode_combo.setCurrentIndex(1)  # Auto
+                    self.pdfplumber_param_mode_combo.blockSignals(False)
+                    # Update widget
+                    self.pdfplumber_param_config_widget.set_params('auto', {})
+        else:
+            # Enable Custom option
+            model = self.pdfplumber_param_mode_combo.model()
+            custom_index = self.pdfplumber_param_mode_combo.findText("Custom", Qt.MatchFixedString)
+            if custom_index >= 0:
+                item = model.item(custom_index)
+                item.setEnabled(True)
     
     def _sync_camelot_param_mode_combo(self):
         """Sync camelot_param_mode_combo with camelot_param_config_widget's current mode"""

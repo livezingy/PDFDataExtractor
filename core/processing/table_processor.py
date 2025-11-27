@@ -43,18 +43,19 @@ class PageFeatureAnalyzer:
     保持旧API不变，使现有代码无需修改即可继续工作
     """
     
-    def __init__(self, page):
+    def __init__(self, page, enable_logging=True):
         """
         初始化适配器
         
         Args:
             page: pdfplumber.Page对象
+            enable_logging: 是否输出详细的页面元素调试信息（默认True）
         """
         self.page = page
         self.logger = AppLogger.get_logger()
         
-        # 初始化新的模块化组件
-        self._feature_analyzer = FeatureAnalyzer(page)
+        # 初始化新的模块化组件（传递enable_logging参数）
+        self._feature_analyzer = FeatureAnalyzer(page, enable_logging=enable_logging)
         self._classifier = TableTypeClassifier(self._feature_analyzer, page)
         self._calculator = TableParamsCalculator(self._feature_analyzer)
     
@@ -163,9 +164,9 @@ class TableProcessor:
                 self.logger.error(f"Invalid pdf_path: {pdf_path}")
                 return []
 
-            # 初始化页面特征分析器（适配器）
+            # 初始化页面特征分析器（适配器，禁用详细日志避免重复输出）
             try:
-                feature_analyzer = PageFeatureAnalyzer(page)
+                feature_analyzer = PageFeatureAnalyzer(page, enable_logging=False)
             except Exception as e:
                 self.logger.error(f"Failed to initialize PageFeatureAnalyzer: {e}")
                 return []
@@ -292,7 +293,7 @@ class TableProcessor:
         evaluator.flavor = "lines"
 
         if feature_analyzer is None:
-            feature_analyzer = PageFeatureAnalyzer(page)
+            feature_analyzer = PageFeatureAnalyzer(page, enable_logging=False)
         
         # Get parameters based on mode (default/auto/custom)
         param_mode = self.params.get('pdfplumber_param_mode', 'auto')
@@ -331,7 +332,7 @@ class TableProcessor:
         evaluator.flavor = "text"
 
         if feature_analyzer is None:
-            feature_analyzer = PageFeatureAnalyzer(page)
+            feature_analyzer = PageFeatureAnalyzer(page, enable_logging=False)
         
         # Get parameters based on mode (default/auto/custom)
         param_mode = self.params.get('pdfplumber_param_mode', 'auto')
@@ -370,7 +371,7 @@ class TableProcessor:
         evaluator.flavor = "lattice"
 
         if feature_analyzer is None:
-            feature_analyzer = PageFeatureAnalyzer(page)
+            feature_analyzer = PageFeatureAnalyzer(page, enable_logging=False)
         
         image_shape = (int(page.height * 2), int(page.width * 2))
         
@@ -378,11 +379,17 @@ class TableProcessor:
         param_mode = self.params.get('camelot_lattice_param_mode', 'auto')
         if param_mode == 'custom' and 'camelot_lattice_custom_params' in self.params:
             params = self.params['camelot_lattice_custom_params'].copy()
+            # Ensure flavor is set for custom params
+            if 'flavor' not in params:
+                params['flavor'] = 'lattice'
         elif param_mode == 'default':
             from core.utils.param_config import get_default_camelot_lattice_params
             params = get_default_camelot_lattice_params()
         else:  # auto
             params = feature_analyzer.get_camelot_lattice_params(image_shape)
+            # Ensure flavor is set
+            if 'flavor' not in params:
+                params['flavor'] = 'lattice'
         
         params['pages'] = str(page_num)
         self.logger.info(f"[TableProcessor] Using camelot lattice parameters: {params}")
@@ -422,17 +429,23 @@ class TableProcessor:
         evaluator.flavor = "stream"
 
         if feature_analyzer is None:
-            feature_analyzer = PageFeatureAnalyzer(page)
+            feature_analyzer = PageFeatureAnalyzer(page, enable_logging=False)
         
         # Get parameters based on mode (default/auto/custom)
         param_mode = self.params.get('camelot_stream_param_mode', 'auto')
         if param_mode == 'custom' and 'camelot_stream_custom_params' in self.params:
             params = self.params['camelot_stream_custom_params'].copy()
+            # Ensure flavor is set for custom params
+            if 'flavor' not in params:
+                params['flavor'] = 'stream'
         elif param_mode == 'default':
             from core.utils.param_config import get_default_camelot_stream_params
             params = get_default_camelot_stream_params()
         else:  # auto
             params = feature_analyzer.get_camelot_stream_params()
+            # Ensure flavor is set
+            if 'flavor' not in params:
+                params['flavor'] = 'stream'
         
         params['pages'] = str(page_num)
         

@@ -26,12 +26,13 @@ class PageFeatureAnalyzer:
     页面特征(lines, curves, rects, chars, text_lines)分析器
     """
     
-    def __init__(self, page):
+    def __init__(self, page, enable_logging=True):
         """
         初始化页面特征分析器并自动执行所有分析
         
         Args:
             page: pdfplumber.Page对象
+            enable_logging: 是否输出详细的页面元素调试信息（默认True）
         """
         self.page = page
         self.logger = AppLogger.get_logger()
@@ -41,7 +42,10 @@ class PageFeatureAnalyzer:
         self.curves = page.curves if hasattr(page, 'curves') else []
         self.rects = page.rects if hasattr(page, 'rects') else []
         self.chars = page.chars if hasattr(page, 'chars') else []
-        self.text_lines = page.text_lines if hasattr(page, 'text_lines') else []
+        
+        # 获取text_lines：按优先级尝试多种方式，并记录来源
+        self.text_lines, self.text_lines_source = self._get_text_lines(page)
+        
         
         # 步骤2: 先分析字符特征（获取 min_height 用于后续的线条合并阈值计算）
         self._analyze_chars()
@@ -51,10 +55,153 @@ class PageFeatureAnalyzer:
         self._analyze_text_lines()
         self._analyze_lines()        
         
-        # 输出详细的页面元素调试信息
-        self._log_page_elements()        
+        # 输出详细的页面元素调试信息（仅在启用时）
+        if enable_logging:
+            self._log_page_elements()        
         
    
+    def _get_text_lines(self, page):
+        """
+        获取text_lines，按优先级尝试多种方式：
+        1. 直接使用page.text_lines属性（如果存在且非空）
+        2. 调用page.extract_text_lines()方法（如果存在）
+        3. 从page.chars构建text_lines
+        
+        Args:
+            page: pdfplumber.Page对象
+            
+        Returns:
+            tuple: (text_lines列表, 来源字符串)
+        """
+        # 方式1: 尝试直接使用page.text_lines属性
+        if hasattr(page, 'text_lines'):
+            text_lines = page.text_lines
+            if text_lines and len(text_lines) > 0:
+                self.logger.debug("Using page.text_lines attribute")
+                return text_lines, "page.text_lines属性"
+        
+        # 方式2: 尝试调用extract_text_lines()方法
+        if hasattr(page, 'extract_text_lines'):
+            try:
+                # 计算合适的容差参数（基于chars特征）
+                x_tolerance = 3.0  # 默认值
+                y_tolerance = 5.0  # 默认值
+                
+                if self.chars and len(self.chars) > 0:
+                    # 分析chars以计算合适的容差
+                    char_widths = [c.get('width', 0) for c in self.chars if 'width' in c]
+                    char_heights = [c.get('height', 0) for c in self.chars if 'height' in c]
+                    
+                    if char_widths:
+                        mode_width = self._get_mode_with_fallback(char_widths)
+                        x_tolerance = max(1.0, min(mode_width * 1.5, 10.0))
+                    
+                    if char_heights:
+                        mode_height = self._get_mode_with_fallback(char_heights)
+                        y_tolerance = max(1.0, min(mode_height * 0.2, 8.0))
+                
+                # 尝试调用extract_text_lines，支持参数则传入，不支持则无参调用
+                try:
+                    # 尝试带参数调用（某些版本支持）
+                    text_lines = page.extract_text_lines(
+                        x_tolerance=x_tolerance,
+                        y_tolerance=y_tolerance
+                    )
+                    self.logger.debug(
+                        f"Using page.extract_text_lines() with x_tolerance={x_tolerance:.2f}, "
+                        f"y_tolerance={y_tolerance:.2f}"
+                    )
+                    if text_lines and len(text_lines) > 0:
+                        return text_lines, f"page.extract_text_lines()(Parameters: x_tol={x_tolerance:.2f}, y_tol={y_tolerance:.2f})"
+                except TypeError:
+                    # 如果不支持参数，尝试无参调用
+                    try:
+                        text_lines = page.extract_text_lines()
+                        self.logger.debug("Using page.extract_text_lines() without parameters")
+                        if text_lines and len(text_lines) > 0:
+                            return text_lines, "page.extract_text_lines()(No Parameters Passed)"
+                    except Exception as e:
+                        self.logger.debug(f"extract_text_lines() failed: {e}")
+            except Exception as e:
+                self.logger.debug(f"extract_text_lines() not available or failed: {e}")
+        
+        # 方式3: 从chars构建text_lines
+        if self.chars and len(self.chars) > 0:
+            self.logger.debug("Building text_lines from chars")
+            text_lines = self._build_text_lines_from_chars()
+            return text_lines, "从page.chars重构"
+        
+        # 如果所有方式都失败，返回空列表
+        self.logger.debug("No text_lines available, returning empty list")
+        return [], "无可用来源(空列表)"
+    
+    
+    def _build_text_lines_from_chars(self, y_tolerance=None):
+        """
+        从chars构建text_lines
+        
+        Args:
+            y_tolerance: y坐标容差（点），如果为None则自动计算
+            
+        Returns:
+            list: text_lines列表，每个元素包含top, bottom, x0, x1, chars等字段
+        """
+        if not self.chars or len(self.chars) == 0:
+            return []
+        
+        # 计算y_tolerance（如果未提供）
+        if y_tolerance is None:
+            char_heights = [c.get('height', 0) for c in self.chars if 'height' in c]
+            if char_heights:
+                mode_height = self._get_mode_with_fallback(char_heights)
+                y_tolerance = max(1.0, min(mode_height * 0.2, 8.0))
+            else:
+                y_tolerance = 2.0  # 默认值
+        
+        # 按y坐标分组字符
+        char_groups = {}
+        for char in self.chars:
+            # 使用top作为行的y坐标
+            y = char.get('top', char.get('y0', 0))
+            
+            # 找到最接近的y坐标组
+            matched_y = None
+            for group_y in char_groups.keys():
+                if abs(y - group_y) <= y_tolerance:
+                    matched_y = group_y
+                    break
+            
+            if matched_y is None:
+                matched_y = y
+                char_groups[matched_y] = []
+            
+            char_groups[matched_y].append(char)
+        
+        # 构建text_lines
+        text_lines = []
+        for y, chars in sorted(char_groups.items(), reverse=True):  # 从上到下
+            if not chars:
+                continue
+            
+            # 计算行的边界
+            tops = [c.get('top', c.get('y0', 0)) for c in chars]
+            bottoms = [c.get('bottom', c.get('y1', 0)) for c in chars]
+            lefts = [c.get('x0', 0) for c in chars]
+            rights = [c.get('x1', 0) for c in chars]
+            
+            # 按x坐标排序字符
+            chars_sorted = sorted(chars, key=lambda c: c.get('x0', 0))
+            
+            text_line = {
+                'top': min(tops),
+                'bottom': max(bottoms),
+                'x0': min(lefts),
+                'x1': max(rights),
+                'chars': chars_sorted
+            }
+            text_lines.append(text_line)
+        
+        return text_lines
     
     @staticmethod
     def _get_mode_with_fallback(values, min_count=3):
@@ -541,10 +688,33 @@ class PageFeatureAnalyzer:
         chars_w_mode = self.char_analysis.get('mode_width', 0)
         self.logger.info(f"\n6. Character Information After Analysis")
         self.logger.info(f"   Character height: min={chars_h_min:.2f}pt, max={chars_h_max:.2f}pt, mode={chars_h_mode:.2f}pt")
+        self.logger.info(f"   Character width: min={chars_w_min:.2f}pt, max={chars_w_max:.2f}pt, mode={chars_w_mode:.2f}pt")
         
-    
-    
-    
+        # 7. Text Lines信息
+        text_line_info = self.text_line_analysis
+        total_lines = text_line_info.get('total_lines', 0)
+        min_line_height = text_line_info.get('min_line_height', 0)
+        max_line_height = text_line_info.get('max_line_height', 0)
+        mode_line_height = text_line_info.get('mode_line_height', 0)
+        min_line_spacing = text_line_info.get('min_line_spacing', 0)
+        max_line_spacing = text_line_info.get('max_line_spacing', 0)
+        mode_line_spacing = text_line_info.get('mode_line_spacing', 0)
+        
+        self.logger.info(f"\n7. TEXT LINES Information")
+        self.logger.info(f"   Source: {getattr(self, 'text_lines_source', 'unknown')}")
+        self.logger.info(f"   Total text lines: {total_lines}")
+        if total_lines > 0:
+            self.logger.info(f"   Line height: min={min_line_height:.2f}pt, max={max_line_height:.2f}pt, mode={mode_line_height:.2f}pt")
+            if min_line_spacing > 0 or max_line_spacing > 0:
+                self.logger.info(f"   Line spacing: min={min_line_spacing:.2f}pt, max={max_line_spacing:.2f}pt, mode={mode_line_spacing:.2f}pt")
+            else:
+                self.logger.info(f"   Line spacing: N/A (no spacing data available)")
+        else:
+            self.logger.info(f"   No text lines found")
+        
+        self.logger.info("="*70)
+        
+        
     # === 公开接口：提供访问分析结果的属性 ===
     
     @property

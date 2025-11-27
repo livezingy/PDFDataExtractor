@@ -38,6 +38,7 @@ class ParamConfigWidget(QWidget):
         self.mode_combo.addItems(["Default", "Auto", "Custom"])
         self.mode_combo.setCurrentIndex(1)  # Default to Auto
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+        # Note: Custom mode will be disabled when flavor is auto (handled by parent)
         mode_layout.addWidget(mode_label)
         mode_layout.addWidget(self.mode_combo)
         mode_layout.addStretch()
@@ -185,9 +186,18 @@ class ParamConfigWidget(QWidget):
                             params[param_name] = float(widget.text())
                         except ValueError:
                             params[param_name] = widget.text()
+            
+            # For Camelot, ensure flavor is included in custom params
+            if self.method == 'camelot' and hasattr(self, 'flavor') and self.flavor:
+                params['flavor'] = self.flavor
         
         # Validate parameters
         if mode == 'custom' and params:
+            # Store flavor before validation (validation functions may remove it)
+            camelot_flavor = None
+            if self.method == 'camelot' and 'flavor' in params:
+                camelot_flavor = params['flavor']
+            
             if self.method == 'pdfplumber':
                 is_valid, error_msg, validated_params = validate_pdfplumber_params(params)
             elif self.method == 'camelot':
@@ -202,6 +212,10 @@ class ParamConfigWidget(QWidget):
                     is_valid, error_msg, validated_params = True, None, params
             else:
                 is_valid, error_msg, validated_params = True, None, params
+            
+            # Restore flavor after validation
+            if self.method == 'camelot' and camelot_flavor:
+                validated_params['flavor'] = camelot_flavor
             
             if not is_valid and error_msg:
                 QMessageBox.warning(self, "Parameter Validation Error", error_msg)
@@ -245,6 +259,14 @@ class ParamConfigWidget(QWidget):
                         except ValueError:
                             params[param_name] = widget.text()
             
+            # For Camelot, ensure flavor is included in custom params
+            if self.method == 'camelot' and hasattr(self, 'flavor') and self.flavor:
+                params['flavor'] = self.flavor
+            
+            # For Camelot, ensure flavor is included in custom params
+            if self.method == 'camelot' and hasattr(self, 'flavor') and self.flavor:
+                validated_params['flavor'] = self.flavor
+            
             # Validate
             if self.method == 'pdfplumber':
                 is_valid, error_msg, validated_params = validate_pdfplumber_params(params)
@@ -260,6 +282,10 @@ class ParamConfigWidget(QWidget):
                     is_valid, error_msg, validated_params = True, None, params
             else:
                 is_valid, error_msg, validated_params = True, None, params
+            
+            # Ensure flavor is preserved after validation
+            if self.method == 'camelot' and hasattr(self, 'flavor') and self.flavor:
+                validated_params['flavor'] = self.flavor
             
             return {'mode': 'custom', 'params': validated_params}
     

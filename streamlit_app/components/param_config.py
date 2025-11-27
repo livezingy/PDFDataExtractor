@@ -42,10 +42,20 @@ def render_param_config(method: str, flavor: str = None) -> dict:
         param_defs = {}
     
     # Parameter mode selection
+    # If flavor is None (auto), disable Custom option
+    mode_options = ["Default", "Auto", "Custom"]
+    default_index = 1  # Default to Auto
+    
+    # If flavor is None (auto), remove Custom from options
+    if flavor is None:
+        mode_options = ["Default", "Auto"]
+        # If current selection was Custom, it will be reset to Auto
+        default_index = 1
+    
     mode = st.selectbox(
         "Parameter Mode",
-        ["Default", "Auto", "Custom"],
-        index=1,  # Default to Auto
+        mode_options,
+        index=default_index,
         key=f"param_mode_{method}_{flavor or 'none'}"
     )
     mode = mode.lower()
@@ -133,9 +143,18 @@ def render_param_config(method: str, flavor: str = None) -> dict:
                             key=param_key
                         )
                         params[param_name] = value
+            
+            # For Camelot, ensure flavor is included in custom params
+            if method == 'camelot' and flavor:
+                params['flavor'] = flavor
         
         # Validate parameters (only if params were collected)
         if params and param_defs:
+            # Store flavor before validation (validation functions may remove it)
+            camelot_flavor = None
+            if method == 'camelot' and flavor and 'flavor' in params:
+                camelot_flavor = params.get('flavor', flavor)
+            
             if method == 'pdfplumber':
                 is_valid, error_msg, validated_params = validate_pdfplumber_params(params)
             elif method == 'camelot':
@@ -147,6 +166,10 @@ def render_param_config(method: str, flavor: str = None) -> dict:
                     is_valid, error_msg, validated_params = True, None, params
             else:
                 is_valid, error_msg, validated_params = True, None, params
+            
+            # Restore flavor after validation for Camelot
+            if method == 'camelot' and camelot_flavor:
+                validated_params['flavor'] = camelot_flavor
             
             if not is_valid and error_msg:
                 st.error(f"Parameter validation error: {error_msg}")

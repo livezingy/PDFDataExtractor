@@ -14,6 +14,7 @@
 from typing import Dict, Optional, Tuple
 import numpy as np
 from core.utils.logger import AppLogger
+import math
 
 
 class TableParamsCalculator:
@@ -353,13 +354,16 @@ class TableParamsCalculator:
             params['edge_tol'] = 50
         
         # row_tol: 最小字符高度
-        if self.analyzer.char_analysis['min_height'] > 0:
-            params['row_tol'] = self.analyzer.char_analysis['min_height']
-            params['row_tol'] = max(1, min(params['row_tol'], 10))
+        if self.analyzer.char_analysis.get('min_height', 0) > 0:
+            #取字符高度的众数，且向上取整
+            params['row_tol'] = math.ceil(self.analyzer.char_analysis['mode_height'])#int(self.analyzer.char_analysis['mode_height']  + 0.5)
             
+            
+            params['row_tol'] = max(2,min(params['row_tol'], self.analyzer.char_analysis['min_height'] * 1.5))
+
             self.logger.debug(
                 f"row_tol={params['row_tol']:.2f} "
-                f"(min_char_height={self.analyzer.char_analysis['min_height']:.2f})"
+                f"(mode_char_height={self.analyzer.char_analysis['mode_height']:.2f})"
             )
         else:
             params['row_tol'] = 2  # 默认值

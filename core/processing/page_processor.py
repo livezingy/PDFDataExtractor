@@ -183,7 +183,7 @@ class PageProcessor(BaseProcessor):
         from core.processing.table_processor import PageFeatureAnalyzer
         
         try:
-            # 创建特征分析器
+            # 创建特征分析器（禁用详细日志，避免重复输出）
             analyzer = PageFeatureAnalyzer(page)
             
             # 预测表格类型
@@ -224,6 +224,14 @@ class PageProcessor(BaseProcessor):
             
             if method == 'camelot':
                 page_num = getattr(page, 'page_number', 1)
+                # Handle auto flavor (None) by auto-detecting table type
+                if flavor is None or flavor == 'auto':
+                    from core.processing.table_processor import PageFeatureAnalyzer
+                    analyzer = PageFeatureAnalyzer(page, enable_logging=False)
+                    table_type = analyzer.predict_table_type()
+                    flavor = 'lattice' if table_type == 'bordered' else 'stream'
+                    self.logger.info(f"[PageProcessor] Auto-detected flavor: {flavor} (table_type: {table_type})")
+                
                 if flavor == 'lattice':
                     results = table_processor.extract_camelot_lattice(pdf_path, page_num, page)
                 elif flavor == 'stream':
@@ -232,6 +240,14 @@ class PageProcessor(BaseProcessor):
                     self.logger.error(f"[PageProcessor] Unknown Camelot flavor: {flavor}")
                     return {'success': False, 'error': f'Unknown Camelot flavor: {flavor}', 'tables': []}
             elif method == 'pdfplumber':
+                # Handle auto flavor (None) by auto-detecting table type
+                if flavor is None or flavor == 'auto':
+                    from core.processing.table_processor import PageFeatureAnalyzer
+                    analyzer = PageFeatureAnalyzer(page, enable_logging=False)
+                    table_type = analyzer.predict_table_type()
+                    flavor = 'lines' if table_type == 'bordered' else 'text'
+                    self.logger.info(f"[PageProcessor] Auto-detected flavor: {flavor} (table_type: {table_type})")
+                
                 if flavor == 'lines':
                     results = table_processor.extract_pdfplumber_lines(page)
                 elif flavor == 'text':
