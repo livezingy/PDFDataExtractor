@@ -17,7 +17,8 @@ import time
 import numpy as np
 import pandas as pd
 import pdfplumber
-import camelot
+# 延迟导入camelot，避免在Streamlit Cloud等环境中导入时因系统依赖问题导致应用启动失败
+# camelot只在extract_camelot_*方法中使用时才导入
 
 from core.utils.logger import AppLogger
 # 延迟导入TableModels，避免在Streamlit中触发torch相关的asyncio事件循环问题
@@ -366,6 +367,16 @@ class TableProcessor:
 
     def extract_camelot_lattice(self, pdf_path, page_num, page, feature_analyzer=None, table_areas=None) -> list:
         """使用Camelot lattice模式提取表格"""
+        # 延迟导入camelot，避免在模块导入时因系统依赖问题导致应用启动失败
+        try:
+            import camelot
+        except ImportError as e:
+            self.logger.error(f"Failed to import camelot: {e}. Camelot may not be available in this environment.")
+            return []
+        except Exception as e:
+            self.logger.error(f"Unexpected error importing camelot: {e}")
+            return []
+        
         evaluator = TableEvaluator()
         evaluator.source = "camelot"
         evaluator.flavor = "lattice"
@@ -424,6 +435,16 @@ class TableProcessor:
 
     def extract_camelot_stream(self, pdf_path, page_num, page, feature_analyzer=None, table_areas=None) -> list:
         """使用Camelot stream模式提取表格"""
+        # 延迟导入camelot，避免在模块导入时因系统依赖问题导致应用启动失败
+        try:
+            import camelot
+        except ImportError as e:
+            self.logger.error(f"Failed to import camelot: {e}. Camelot may not be available in this environment.")
+            return []
+        except Exception as e:
+            self.logger.error(f"Unexpected error importing camelot: {e}")
+            return []
+        
         evaluator = TableEvaluator()
         evaluator.source = "camelot"
         evaluator.flavor = "stream"
