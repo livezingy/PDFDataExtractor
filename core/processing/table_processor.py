@@ -401,6 +401,11 @@ class TableProcessor:
     def extract_camelot_lattice(self, pdf_path, page_num, page, feature_analyzer=None, table_areas=None) -> list:
         """使用Camelot lattice模式提取表格"""
         # 延迟导入camelot，避免在模块导入时因系统依赖问题导致应用启动失败
+        # 在导入camelot之前设置环境变量，避免在无头环境中加载OpenGL库
+        import os
+        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+        os.environ.setdefault('DISPLAY', '')
+        
         try:
             import camelot
         except ImportError as e:
@@ -469,6 +474,11 @@ class TableProcessor:
     def extract_camelot_stream(self, pdf_path, page_num, page, feature_analyzer=None, table_areas=None) -> list:
         """使用Camelot stream模式提取表格"""
         # 延迟导入camelot，避免在模块导入时因系统依赖问题导致应用启动失败
+        # 在导入camelot之前设置环境变量，避免在无头环境中加载OpenGL库
+        import os
+        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+        os.environ.setdefault('DISPLAY', '')
+        
         try:
             import camelot
         except ImportError as e:

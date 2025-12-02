@@ -149,6 +149,9 @@ def detailed_diagnosis():
         
     # 4. 检查 camelot
     st.subheader("Camelot 检查")
+    # 在导入camelot之前设置环境变量，避免在无头环境中加载OpenGL库
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    os.environ.setdefault('DISPLAY', '')
     try:
         import camelot
         st.success(f"✅ Camelot 导入成功 - 版本: {camelot.__version__}")
@@ -176,6 +179,9 @@ def sidebar_quick_check():
         st.sidebar.error(f"OpenCV 失败: {e}")
     
     # Camelot 检查
+    # 在导入camelot之前设置环境变量，避免在无头环境中加载OpenGL库
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    os.environ.setdefault('DISPLAY', '')
     try:
         import camelot
         st.sidebar.success(f"Camelot: {camelot.__version__}")

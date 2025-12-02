@@ -598,10 +598,17 @@ def check_dependencies() -> Dict[str, bool]:
         pass
     
     # 检查camelot
+    # 在导入camelot之前设置环境变量，避免在无头环境中加载OpenGL库
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    os.environ.setdefault('DISPLAY', '')
     try:
         import camelot
         dependencies['camelot'] = True
     except ImportError:
+        pass
+    except Exception as e:
+        # 捕获其他可能的导入错误（如libGL.so.1）
+        logger.warning(f"Camelot import failed: {e}")
         pass
     
     # 检查transformer（可选，需要模型文件）
