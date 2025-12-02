@@ -1,14 +1,7 @@
-# Streamlit Cloud 系统依赖包
-# 用于支持 Camelot 和 Ghostscript
-
-# Ghostscript - Camelot 的核心依赖
 ghostscript
-
-# OpenGL 相关库（用于无头环境）
 libgl1-mesa-glx
 libglib2.0-0
-
-# 其他可能需要的系统库
 libgomp1
-libgthread-2.0-0
+libxrender1
+libfontconfig1
 
