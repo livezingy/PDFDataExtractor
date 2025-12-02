@@ -9,8 +9,27 @@ import pandas as pd
 import asyncio, string
 from core.models.table_models import TableModels
 from core.utils.logger import AppLogger
-import cv2
 import numpy as np
+import os
+
+# 在导入cv2之前设置环境变量，避免在无头环境中加载OpenGL库
+# 这对于Streamlit Cloud等无头服务器环境非常重要
+os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
+os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+os.environ.setdefault('DISPLAY', '')
+
+try:
+    import cv2
+    # 如果cv2成功导入，尝试设置后端（如果支持）
+    try:
+        cv2.setNumThreads(1)  # 在某些环境中可以减少线程相关问题
+    except:
+        pass
+except ImportError as e:
+    # 如果cv2导入失败，记录警告但不阻止程序运行
+    import warnings
+    warnings.warn(f"Failed to import cv2: {e}. Some features may be unavailable.")
+    cv2 = None
 from collections import Counter
 from itertools import tee, count
 from core.utils.path_utils import get_app_dir

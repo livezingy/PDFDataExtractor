@@ -1,9 +1,30 @@
 import numpy as np
 import pandas as pd
-import cv2
 import re
 from collections import Counter
 from scipy.spatial import distance
+
+# 在导入cv2之前设置环境变量，避免在无头环境中加载OpenGL库
+# 这对于Streamlit Cloud等无头服务器环境非常重要
+import os
+os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '0'
+# 禁用GUI后端，避免加载libGL.so.1
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+os.environ['DISPLAY'] = ''
+
+try:
+    import cv2
+    # 如果cv2成功导入，尝试设置后端（如果支持）
+    try:
+        cv2.setNumThreads(1)  # 在某些环境中可以减少线程相关问题
+    except:
+        pass
+except ImportError as e:
+    # 如果cv2导入失败，记录警告但不阻止程序运行
+    # 因为当前代码中cv2可能未被实际使用
+    import warnings
+    warnings.warn(f"Failed to import cv2: {e}. Some features may be unavailable.")
+    cv2 = None
 
 class TableEvaluator:
     """Domain and source adaptive table quality evaluator"""
