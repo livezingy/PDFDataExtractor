@@ -570,7 +570,7 @@ class PageFeatureAnalyzer:
         
         if original_lines:
             lengths = []
-            for line in original_lines[:10]:  # 只显示前10条
+            for line in original_lines[:5]:  # 只显示前5条
                 length = math.sqrt((line['x1'] - line['x0'])**2 + (line['y1'] - line['y0'])**2)
                 lengths.append(length)
                 self.logger.info(
@@ -578,11 +578,25 @@ class PageFeatureAnalyzer:
                     f"length={length:.1f}pt, linewidth={line.get('linewidth', 0):.2f}"
                 )
             
-            if len(original_lines) > 10:
-                self.logger.info(f"   ... {len(original_lines) - 10} more lines")
+            if len(original_lines) > 5:
+                self.logger.info(f"   ... {len(original_lines) - 5} more lines")
             
-            self.logger.info(f"   Length stats: min={min(lengths):.1f}pt, max={max(lengths):.1f}pt, "
-                           f"avg={np.mean(lengths):.1f}pt")
+            
+            # 输出详细的线条统计信息（基于所有处理后的线条）
+            line_analysis = getattr(self, 'line_analysis', {})
+            if line_analysis:
+                self.logger.info(f"   Horizontal length stats: "
+                               f"min={line_analysis.get('min_horizontal_length', 0):.1f}pt, "
+                               f"max={line_analysis.get('max_horizontal_length', 0):.1f}pt, "
+                               f"mode={line_analysis.get('mode_horizontal_length', 0):.1f}pt")
+                self.logger.info(f"   Vertical length stats: "
+                               f"min={line_analysis.get('min_vertical_length', 0):.1f}pt, "
+                               f"max={line_analysis.get('max_vertical_length', 0):.1f}pt, "
+                               f"mode={line_analysis.get('mode_vertical_length', 0):.1f}pt")
+                self.logger.info(f"   Line width stats: "
+                               f"min={line_analysis.get('min_line_width', 0):.2f}pt, "
+                               f"max={line_analysis.get('max_line_width', 0):.2f}pt, "
+                               f"mode={line_analysis.get('mode_line_width', 0):.2f}pt")
         
         # 2. Rects信息
         rects = self.page.rects if hasattr(self.page, 'rects') else []
@@ -603,7 +617,7 @@ class PageFeatureAnalyzer:
             if min_char_height <= 0:
                 min_char_height = 5.0
             
-            for rect in rects[:10]:  # 只显示前10个
+            for rect in rects[:5]:  # 只显示前5个
                 width = rect.get('width', 0)
                 height = rect.get('height', 0)
                 is_stroked = rect.get('stroke', False)
@@ -621,8 +635,8 @@ class PageFeatureAnalyzer:
                     f"stroke={is_stroked}, fill={is_filled}"   
                 )
             
-            if len(rects) > 10:
-                self.logger.info(f"   ... {len(rects) - 10} more rectangles")
+            if len(rects) > 5:
+                self.logger.info(f"   ... {len(rects) - 5} more rectangles")
             
             # 统计所有rects的特征
             all_widths = [r.get('width', 0) for r in rects]
@@ -643,7 +657,7 @@ class PageFeatureAnalyzer:
         self.logger.info(f"   Count: {len(curves)}")
         
         if curves:
-            for curve in curves[:10]:  # 只显示前10条
+            for curve in curves[:5]:  # 只显示前5条
                 points = curve.get('pts', [])
                 if len(points) >= 2:
                     x0, y0 = points[0]
@@ -656,8 +670,8 @@ class PageFeatureAnalyzer:
                     f"control_points={len(points)}, stroke={curve.get('stroke', False)}"
                 )
             
-            if len(curves) > 10:
-                self.logger.info(f"   ... {len(curves) - 10} more curves")
+            if len(curves) > 5:    
+                self.logger.info(f"   ... {len(curves) - 5} more curves")
         
         # 4. 转换后的lines信息
         converted_count = 0

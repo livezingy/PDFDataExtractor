@@ -188,22 +188,55 @@ class TableProcessor:
             
             page_num = getattr(page, "page_number", 1)
             
+            # 获取预测的表格类型
+            try:
+                predicted_table_type = feature_analyzer.predict_table_type()
+            except Exception as e:
+                self.logger.error(f"Failed to predict table type: {e}")
+                return []
+            
             # 自动检测表格类型和flavor
             if flavor is None:
                 try:
-                    table_type = feature_analyzer.predict_table_type()
-                    
                     if method == "pdfplumber":
-                        flavor = "lines" if table_type == "bordered" else "text"
+                        flavor = "lines" if predicted_table_type == "bordered" else "text"
                     elif method == "camelot":
-                        flavor = "lattice" if table_type == "bordered" else "stream"
+                        flavor = "lattice" if predicted_table_type == "bordered" else "stream"
                     else:  # mixed method
                         flavor = "auto"
                 except Exception as e:
-                    self.logger.error(f"Failed to predict table type: {e}")
+                    self.logger.error(f"Failed to set flavor: {e}")
                     return []
+            else:
+                # 检查用户手动设置的flavor是否与预测类型匹配
+                is_mismatch = False
+                if method == "pdfplumber":
+                    # pdfplumber: "lines"对应"bordered"，"text"对应"unbordered"
+                    if (flavor == "lines" and predicted_table_type != "bordered") or \
+                       (flavor == "text" and predicted_table_type != "unbordered"):
+                        is_mismatch = True
+                elif method == "camelot":
+                    # camelot: "lattice"对应"bordered"，"stream"对应"unbordered"
+                    if (flavor == "lattice" and predicted_table_type != "bordered") or \
+                       (flavor == "stream" and predicted_table_type != "unbordered"):
+                        is_mismatch = True
+                
+                if is_mismatch:
+                    # 生成建议的flavor
+                    if method == "pdfplumber":
+                        suggested_flavor = "lines" if predicted_table_type == "bordered" else "text"
+                    elif method == "camelot":
+                        suggested_flavor = "lattice" if predicted_table_type == "bordered" else "stream"
+                    else:
+                        suggested_flavor = "auto"
+                    
+                    self.logger.warning(
+                        f"[TableProcessor] ⚠️ Flavor设置与预测类型不匹配！"
+                        f" 预测类型: {predicted_table_type}, 设置的Flavor: {flavor}, "
+                        f"建议Flavor: {suggested_flavor} (页面 {page_num})"
+                    )
             
-            self.logger.info(f"[TableProcessor] Method: {method}, Flavor: {flavor}, Table type: {feature_analyzer.predict_table_type()} on page {page_num}")
+            self.logger.info(f"[TableProcessor] Method: {method}, Flavor: {flavor}, Predicted Table type: {predicted_table_type} on page {page_num}")
             
             # 根据方法和flavor处理
             try:
