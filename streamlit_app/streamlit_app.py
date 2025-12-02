@@ -8,6 +8,15 @@ Streamlit application main entry point
 import os
 os.environ['STREAMLIT_SERVER_FILE_WATCHER_TYPE'] = 'none'
 
+# 在应用启动的最早阶段设置环境变量，避免在无头环境中加载OpenGL库
+# 这对于Camelot和OpenCV等依赖系统库的包非常重要
+# 必须在导入任何可能使用这些库的模块之前设置
+os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+os.environ.setdefault('DISPLAY', '')
+os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
+# Ghostscript设备设置（Camelot依赖Ghostscript）
+os.environ.setdefault('GS_DEVICE', 'display')
+
 import streamlit as st
 import sys
 from pathlib import Path
