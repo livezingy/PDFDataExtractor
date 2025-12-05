@@ -194,6 +194,10 @@ def validate_camelot_lattice_params(params: Dict[str, Any]) -> Tuple[bool, Optio
     errors = []
     
     for key, value in params.items():
+        if key == 'flavor':
+            validated[key] = value
+            continue
+            
         if key not in CAMELOT_LATTICE_PARAM_DEFS:
             errors.append(f"Unknown parameter: {key}")
             continue
@@ -241,6 +245,10 @@ def validate_camelot_stream_params(params: Dict[str, Any]) -> Tuple[bool, Option
     errors = []
     
     for key, value in params.items():
+        if key == 'flavor':
+            validated[key] = value
+            continue
+            
         if key not in CAMELOT_STREAM_PARAM_DEFS:
             errors.append(f"Unknown parameter: {key}")
             continue

@@ -331,8 +331,7 @@ def main():
             
             ### Feature Limitations
             
-            - Some features may be limited (e.g., Camelot requires system dependencies)
-            - Transformer models may not be available (large model files)
+            - Transformer models are not available (large model files). Download the repository and model files to local PC could test the Transformer Feature.
             - Recommend using PDFPlumber method first
             
             ### Usage Recommendations
