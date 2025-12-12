@@ -30,4 +30,4 @@ git checkout archive/gui-version
 
 ## 版本历史
 
-- v1.50.0：最后一个包含GUI的稳定版本
+- v1.0.0：最后一个包含GUI的稳定版本
