@@ -177,4 +177,20 @@ EasyOCR在识别表格中的文本时，识别精度有待进一步提升。
 
 ---
 
-*PDF Table Extractor - 让表格提取更智能、更准确*
+## 版本历史
+
+### v2.0+ (当前版本)
+- 仅支持Streamlit界面
+- 集成PaddleOCR (PP-Structure)
+- 增强的表格检测和OCR能力
+
+### v1.x (已归档)
+- 支持GUI (PySide6) 和 Streamlit界面
+- 使用Camelot和PDFPlumber进行表格提取
+- 使用Tesseract和EasyOCR进行OCR
+
+**历史版本**：
+- [v1.x维护分支](../../tree/v1.x-maintenance)：用于v1.x版本的bug修复
+- [GUI版本归档](../../tree/archive/gui-version)：完整的GUI版本代码（只读）
+
+**迁移指南**：请参考 [MIGRATION.md](MIGRATION.md)
