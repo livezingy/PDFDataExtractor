@@ -30,6 +30,11 @@ def _lazy_register():
 from core.engines.base import BaseOCREngine, BaseDetectionEngine
 from core.engines.factory import EngineFactory
 
+# 导入引擎类（用于 __all__ 导出）
+from core.engines.easyocr_engine import EasyOCREngine
+from core.engines.transformer_engine import TransformerEngine
+from core.engines.paddleocr_engine import PaddleOCREngine
+
 # 延迟注册引擎
 _lazy_register()
 

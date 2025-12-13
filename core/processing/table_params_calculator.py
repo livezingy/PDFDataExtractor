@@ -14,6 +14,7 @@
 from typing import Dict, Optional, Tuple
 import numpy as np
 from core.utils.logger import AppLogger
+from core.utils.debug_utils import write_debug_log
 import math
 
 
@@ -49,7 +50,6 @@ class TableParamsCalculator:
             dict: pdfplumber参数字典
         """
         # #region agent log
-        from core.utils.debug_utils import write_debug_log
         try:
             write_debug_log(
                 location="table_params_calculator.py:39",
@@ -69,12 +69,16 @@ class TableParamsCalculator:
         v_count = len(v_lines)
         
         # #region agent log
-        write_debug_log(
-            location="table_params_calculator.py:54",
-            message="line counts extracted",
-            data={"h_count": h_count, "v_count": v_count},
-            hypothesis_id="B"
-        )
+        try:
+            write_debug_log(
+                location="table_params_calculator.py:54",
+                message="line counts extracted",
+                data={"h_count": h_count, "v_count": v_count},
+                hypothesis_id="B"
+            )
+        except Exception as e:
+            # 如果日志写入失败，至少记录到标准日志
+            self.logger.warning(f"Debug log write failed at line counts: {e}")
         # #endregion
         
         # 动态选择strategy
@@ -83,19 +87,23 @@ class TableParamsCalculator:
             horizontal_strategy = 'lines' if h_count >= 10 else 'text'
             
             # #region agent log
-            write_debug_log(
-                location="table_params_calculator.py:59",
-                message="strategy selected for bordered table",
-                data={
-                    "vertical_strategy": vertical_strategy,
-                    "horizontal_strategy": horizontal_strategy,
-                    "v_count": v_count,
-                    "h_count": h_count,
-                    "v_threshold_met": v_count >= 5,
-                    "h_threshold_met": h_count >= 10
-                },
-                hypothesis_id="B"
-            )
+            try:
+                write_debug_log(
+                    location="table_params_calculator.py:59",
+                    message="strategy selected for bordered table",
+                    data={
+                        "vertical_strategy": vertical_strategy,
+                        "horizontal_strategy": horizontal_strategy,
+                        "v_count": v_count,
+                        "h_count": h_count,
+                        "v_threshold_met": v_count >= 5,
+                        "h_threshold_met": h_count >= 10
+                    },
+                    hypothesis_id="B"
+                )
+            except Exception as e:
+                # 如果日志写入失败，至少记录到标准日志
+                self.logger.warning(f"Debug log write failed at strategy selection: {e}")
             # #endregion
             
             self.logger.debug(
@@ -107,17 +115,21 @@ class TableParamsCalculator:
             horizontal_strategy = 'lines' if h_count >= 3 else 'text'
             
             # #region agent log
-            write_debug_log(
-                location="table_params_calculator.py:67",
-                message="strategy selected for unbordered table",
-                data={
-                    "vertical_strategy": vertical_strategy,
-                    "horizontal_strategy": horizontal_strategy,
-                    "h_count": h_count,
-                    "h_threshold_met": h_count >= 3
-                },
-                hypothesis_id="B"
-            )
+            try:
+                write_debug_log(
+                    location="table_params_calculator.py:67",
+                    message="strategy selected for unbordered table",
+                    data={
+                        "vertical_strategy": vertical_strategy,
+                        "horizontal_strategy": horizontal_strategy,
+                        "h_count": h_count,
+                        "h_threshold_met": h_count >= 3
+                    },
+                    hypothesis_id="B"
+                )
+            except Exception as e:
+                # 如果日志写入失败，至少记录到标准日志
+                self.logger.warning(f"Debug log write failed at unbordered strategy selection: {e}")
             # #endregion
             
             self.logger.debug(
@@ -153,7 +165,6 @@ class TableParamsCalculator:
         
         # 自适应snap_tolerance：根据字符尺寸动态调整上限
         # #region agent log
-        from core.utils.debug_utils import write_debug_log
         try:
             char_analysis = self.analyzer.char_analysis
             char_min_width = char_analysis.get('min_width', 0) if isinstance(char_analysis, dict) else 0
@@ -203,7 +214,6 @@ class TableParamsCalculator:
             params['snap_tolerance'] = max(0.5, min(raw_snap_tolerance, max_snap_tolerance))
             
             # #region agent log
-            from core.utils.debug_utils import write_debug_log
             try:
                 write_debug_log(
                     location="table_params_calculator.py:170",
@@ -346,16 +356,20 @@ class TableParamsCalculator:
         
         # #region agent log
         params_changed = {k: v for k, v in params.items() if k in params_before_validation and params_before_validation[k] != v}
-        write_debug_log(
-            location="table_params_calculator.py:208",
-            message="final params after validation",
-            data={
-                "params": params,
-                "params_changed": params_changed,
-                "validation_applied": len(params_changed) > 0
-            },
-            hypothesis_id="C"
-        )
+        try:
+            write_debug_log(
+                location="table_params_calculator.py:208",
+                message="final params after validation",
+                data={
+                    "params": params,
+                    "params_changed": params_changed,
+                    "validation_applied": len(params_changed) > 0
+                },
+                hypothesis_id="C"
+            )
+        except Exception as e:
+            # 如果日志写入失败，至少记录到标准日志
+            self.logger.warning(f"Debug log write failed at final params: {e}")
         # #endregion
         
         self.logger.debug(f"Final pdfplumber params: {params}")

@@ -26,6 +26,10 @@ def _lazy_register():
 from core.extractors.base import BaseExtractor
 from core.extractors.factory import ExtractorFactory
 
+# 导入提取器类（用于 __all__ 导出）
+from core.extractors.camelot_extractor import CamelotExtractor
+from core.extractors.pdfplumber_extractor import PDFPlumberExtractor
+
 # 延迟注册提取器
 _lazy_register()
 
