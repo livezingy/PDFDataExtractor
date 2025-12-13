@@ -224,37 +224,15 @@ class PageProcessor(BaseProcessor):
             
             if method == 'camelot':
                 page_num = getattr(page, 'page_number', 1)
-                # Handle auto flavor (None) by auto-detecting table type
-                if flavor is None or flavor == 'auto':
-                    from core.processing.table_processor import PageFeatureAnalyzer
-                    analyzer = PageFeatureAnalyzer(page, enable_logging=False)
-                    table_type = analyzer.predict_table_type()
-                    flavor = 'lattice' if table_type == 'bordered' else 'stream'
-                    self.logger.info(f"[PageProcessor] Auto-detected flavor: {flavor} (table_type: {table_type})")
-                
-                if flavor == 'lattice':
-                    results = table_processor.extract_camelot_lattice(pdf_path, page_num, page)
-                elif flavor == 'stream':
-                    results = table_processor.extract_camelot_stream(pdf_path, page_num, page)
-                else:
-                    self.logger.error(f"[PageProcessor] Unknown Camelot flavor: {flavor}")
-                    return {'success': False, 'error': f'Unknown Camelot flavor: {flavor}', 'tables': []}
+                # 使用新的提取器接口
+                from core.processing.table_processor import PageFeatureAnalyzer
+                analyzer = PageFeatureAnalyzer(page, enable_logging=False)
+                results = table_processor._process_camelot(pdf_path, page, analyzer, flavor, params.get('table_score_threshold', 0.5))
             elif method == 'pdfplumber':
-                # Handle auto flavor (None) by auto-detecting table type
-                if flavor is None or flavor == 'auto':
-                    from core.processing.table_processor import PageFeatureAnalyzer
-                    analyzer = PageFeatureAnalyzer(page, enable_logging=False)
-                    table_type = analyzer.predict_table_type()
-                    flavor = 'lines' if table_type == 'bordered' else 'text'
-                    self.logger.info(f"[PageProcessor] Auto-detected flavor: {flavor} (table_type: {table_type})")
-                
-                if flavor == 'lines':
-                    results = table_processor.extract_pdfplumber_lines(page)
-                elif flavor == 'text':
-                    results = table_processor.extract_pdfplumber_text(page)
-                else:
-                    self.logger.error(f"[PageProcessor] Unknown PDFPlumber flavor: {flavor}")
-                    return {'success': False, 'error': f'Unknown PDFPlumber flavor: {flavor}', 'tables': []}
+                # 使用新的提取器接口
+                from core.processing.table_processor import PageFeatureAnalyzer
+                analyzer = PageFeatureAnalyzer(page, enable_logging=False)
+                results = table_processor._process_pdfplumber(page, analyzer, flavor, params.get('table_score_threshold', 0.5))
             elif method == 'transformer':
                 # Transformer需要将页面转为图像
                 return await self._process_page_as_scanned(page, params)

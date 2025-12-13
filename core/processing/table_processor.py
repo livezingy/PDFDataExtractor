@@ -31,6 +31,9 @@ from core.processing.page_feature_analyzer import PageFeatureAnalyzer as Feature
 from core.processing.table_type_classifier import TableTypeClassifier
 from core.processing.table_params_calculator import TableParamsCalculator
 
+# 导入提取器工厂
+from core.extractors.factory import ExtractorFactory
+
 
 class PageFeatureAnalyzer:
     """
@@ -155,6 +158,19 @@ class TableProcessor:
         Returns:
             提取的表格列表，包含评分和元数据
         """
+        # #region agent log
+        from core.utils.debug_utils import write_debug_log
+        write_debug_log(
+            location="table_processor.py:147",
+            message="process_pdf_page entry",
+            data={
+                "pdf_path": str(pdf_path) if pdf_path else None,
+                "page_number": getattr(page, "page_number", None) if page else None
+            },
+            hypothesis_id="E"
+        )
+        # #endregion
+        
         try:
             # 参数有效性检查
             if not page:
@@ -188,9 +204,32 @@ class TableProcessor:
             
             page_num = getattr(page, "page_number", 1)
             
+            # #region agent log
+            write_debug_log(
+                location="table_processor.py:176",
+                message="method and params extracted",
+                data={
+                    "method": method,
+                    "flavor": flavor,
+                    "score_threshold": score_threshold,
+                    "page_num": page_num
+                },
+                hypothesis_id="E"
+            )
+            # #endregion
+            
             # 获取预测的表格类型
             try:
                 predicted_table_type = feature_analyzer.predict_table_type()
+                
+                # #region agent log
+                write_debug_log(
+                    location="table_processor.py:193",
+                    message="table type predicted",
+                    data={"predicted_table_type": predicted_table_type},
+                    hypothesis_id="D"
+                )
+                # #endregion
             except Exception as e:
                 self.logger.error(f"Failed to predict table type: {e}")
                 return []
@@ -204,6 +243,19 @@ class TableProcessor:
                         flavor = "lattice" if predicted_table_type == "bordered" else "stream"
                     else:  # mixed method
                         flavor = "auto"
+                    
+                    # #region agent log
+                    write_debug_log(
+                        location="table_processor.py:199",
+                        message="flavor auto-selected",
+                        data={
+                            "method": method,
+                            "predicted_table_type": predicted_table_type,
+                            "selected_flavor": flavor
+                        },
+                        hypothesis_id="E"
+                    )
+                    # #endregion
                 except Exception as e:
                     self.logger.error(f"Failed to set flavor: {e}")
                     return []
@@ -220,6 +272,20 @@ class TableProcessor:
                     if (flavor == "lattice" and predicted_table_type != "bordered") or \
                        (flavor == "stream" and predicted_table_type != "unbordered"):
                         is_mismatch = True
+                
+                # #region agent log
+                write_debug_log(
+                    location="table_processor.py:210",
+                    message="flavor mismatch check",
+                    data={
+                        "method": method,
+                        "flavor": flavor,
+                        "predicted_table_type": predicted_table_type,
+                        "is_mismatch": is_mismatch
+                    },
+                    hypothesis_id="E"
+                )
+                # #endregion
                 
                 if is_mismatch:
                     # 生成建议的flavor
@@ -240,15 +306,43 @@ class TableProcessor:
             
             # 根据方法和flavor处理
             try:
+                # #region agent log
+                write_debug_log(
+                    location="table_processor.py:242",
+                    message="starting table extraction",
+                    data={
+                        "method": method,
+                        "flavor": flavor,
+                        "score_threshold": score_threshold
+                    },
+                    hypothesis_id="E"
+                )
+                # #endregion
+                
                 if method == "pdfplumber":
-                    return self._process_pdfplumber(page, feature_analyzer, flavor, score_threshold)
+                    results = self._process_pdfplumber(page, feature_analyzer, flavor, score_threshold)
                 elif method == "camelot":
-                    return self._process_camelot(pdf_path, page, feature_analyzer, flavor, score_threshold)
+                    results = self._process_camelot(pdf_path, page, feature_analyzer, flavor, score_threshold)
                 elif method == "mixed":
-                    return self._process_mixed(pdf_path, page, feature_analyzer, score_threshold)
+                    results = self._process_mixed(pdf_path, page, feature_analyzer, score_threshold)
                 else:
                     self.logger.error(f"Unknown table extraction method: {method}")
                     return []
+                
+                # #region agent log
+                write_debug_log(
+                    location="table_processor.py:252",
+                    message="table extraction completed",
+                    data={
+                        "method": method,
+                        "tables_found": len(results),
+                        "results": [{"score": r.get("score"), "source": r.get("source")} for r in results[:3]]
+                    },
+                    hypothesis_id="E"
+                )
+                # #endregion
+                
+                return results
             except Exception as e:
                 self.logger.error(f"Error during table processing: {e}")
                 return []
@@ -259,40 +353,75 @@ class TableProcessor:
     
     def _process_pdfplumber(self, page, feature_analyzer, flavor, score_threshold):
         """使用pdfplumber处理页面"""
-        table_type = feature_analyzer.predict_table_type()
-        
-        if flavor == "lines" or (flavor is None and table_type == "bordered"):
-            results = self.extract_pdfplumber_lines(page, feature_analyzer)
-        elif flavor == "text" or (flavor is None and table_type == "unbordered"):
-            results = self.extract_pdfplumber_text(page, feature_analyzer)
-        else:
-            self.logger.error(f"Unknown pdfplumber flavor: {flavor}")
+        try:
+            extractor = ExtractorFactory.create('pdfplumber')
+        except ValueError as e:
+            self.logger.error(f"Failed to create PDFPlumber extractor: {e}")
             return []
         
-        results = [r for r in results if r["score"] >= score_threshold]
+        # 准备参数
+        extract_params = {
+            'flavor': flavor,
+            'param_mode': self.params.get('pdfplumber_param_mode', 'auto'),
+            'pdfplumber_custom_params': self.params.get('pdfplumber_custom_params'),
+            'score_threshold': score_threshold
+        }
+        
+        # 提取表格
+        results = extractor.extract_tables(page, feature_analyzer, extract_params)
         return results
 
     def _process_camelot(self, pdf_path, page, feature_analyzer, flavor, score_threshold):
         """使用camelot处理页面"""
-        page_num = getattr(page, "page_number", 1)
-        table_type = feature_analyzer.predict_table_type()
-        
-        if flavor == "lattice" or (flavor is None and table_type == "bordered"):
-            results = self.extract_camelot_lattice(pdf_path, page_num, page, feature_analyzer)
-        elif flavor == "stream" or (flavor is None and table_type == "unbordered"):
-            results = self.extract_camelot_stream(pdf_path, page_num, page, feature_analyzer)
-        else:
-            self.logger.error(f"Unknown camelot flavor: {flavor}")
+        try:
+            extractor = ExtractorFactory.create('camelot')
+        except ValueError as e:
+            self.logger.error(f"Failed to create Camelot extractor: {e}")
             return []
         
-        results = [r for r in results if r["score"] >= score_threshold]
+        page_num = getattr(page, "page_number", 1)
+        
+        # 准备参数
+        extract_params = {
+            'pdf_path': pdf_path,
+            'page_num': page_num,
+            'flavor': flavor,
+            'param_mode': self.params.get('camelot_lattice_param_mode', self.params.get('camelot_stream_param_mode', 'auto')),
+            'camelot_lattice_custom_params': self.params.get('camelot_lattice_custom_params'),
+            'camelot_stream_custom_params': self.params.get('camelot_stream_custom_params'),
+            'score_threshold': score_threshold,
+            'table_areas': self.params.get('table_areas')
+        }
+        
+        # 提取表格
+        results = extractor.extract_tables(page, feature_analyzer, extract_params)
         return results
 
     def _process_mixed(self, pdf_path, page, feature_analyzer, score_threshold):
         """使用混合方法处理页面"""
+        try:
+            pdfplumber_extractor = ExtractorFactory.create('pdfplumber')
+            camelot_extractor = ExtractorFactory.create('camelot')
+        except ValueError as e:
+            self.logger.error(f"Failed to create extractors: {e}")
+            return []
+        
         # 第一轮：pdfplumber检测
-        pdfplumber_lines = self.extract_pdfplumber_lines(page, feature_analyzer)
-        pdfplumber_text = self.extract_pdfplumber_text(page, feature_analyzer)
+        pdfplumber_params_lines = {
+            'flavor': 'lines',
+            'param_mode': self.params.get('pdfplumber_param_mode', 'auto'),
+            'pdfplumber_custom_params': self.params.get('pdfplumber_custom_params'),
+            'score_threshold': 0.0  # 先不过滤，后面统一过滤
+        }
+        pdfplumber_params_text = {
+            'flavor': 'text',
+            'param_mode': self.params.get('pdfplumber_param_mode', 'auto'),
+            'pdfplumber_custom_params': self.params.get('pdfplumber_custom_params'),
+            'score_threshold': 0.0
+        }
+        
+        pdfplumber_lines = pdfplumber_extractor.extract_tables(page, feature_analyzer, pdfplumber_params_lines)
+        pdfplumber_text = pdfplumber_extractor.extract_tables(page, feature_analyzer, pdfplumber_params_text)
         all_pdfplumber = pdfplumber_lines + pdfplumber_text
         
         # 获取高分区域用于camelot精细化
@@ -303,10 +432,17 @@ class TableProcessor:
         camelot_results = []
         if high_score_bboxes:
             table_type = feature_analyzer.predict_table_type()
-            if table_type == "bordered":
-                camelot_results = self.extract_camelot_lattice(pdf_path, page_num, page, feature_analyzer, table_areas=high_score_bboxes)
-            else:
-                camelot_results = self.extract_camelot_stream(pdf_path, page_num, page, feature_analyzer, table_areas=high_score_bboxes)
+            camelot_params = {
+                'pdf_path': pdf_path,
+                'page_num': page_num,
+                'flavor': 'lattice' if table_type == "bordered" else 'stream',
+                'param_mode': self.params.get('camelot_lattice_param_mode', self.params.get('camelot_stream_param_mode', 'auto')),
+                'camelot_lattice_custom_params': self.params.get('camelot_lattice_custom_params'),
+                'camelot_stream_custom_params': self.params.get('camelot_stream_custom_params'),
+                'score_threshold': 0.0,
+                'table_areas': high_score_bboxes
+            }
+            camelot_results = camelot_extractor.extract_tables(page, feature_analyzer, camelot_params)
         
         # 合并和去重
         all_results = all_pdfplumber + camelot_results

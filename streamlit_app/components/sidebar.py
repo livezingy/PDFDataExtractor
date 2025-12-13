@@ -41,34 +41,82 @@ def render_sidebar() -> dict:
         
         st.header("⚙️ Extraction Configuration")
         
-        # Extraction method selection
-        method = st.selectbox(
-            "Extraction Method",
-            ["PDFPlumber", "Camelot"],
-            help="Select table extraction method (Image files will be processed with Transformer automatically)"
-        )
+        # 根据文件类型显示不同的选择选项
+        is_image_file = False
+        if uploaded_file is not None:
+            file_type = uploaded_file.type.lower()
+            is_image_file = file_type.startswith('image/') or uploaded_file.name.lower().endswith(
+                ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')
+            )
         
-        # Flavor selection (changes dynamically based on method)
-        if method == "PDFPlumber":
-            flavor = st.selectbox(
-                "Flavor",
-                ["auto", "lines", "text"],
-                help="PDFPlumber extraction mode:\n- auto: Auto select\n- lines: For bordered tables\n- text: For unbordered tables"
-            )
-        elif method == "Camelot":
-            flavor = st.selectbox(
-                "Flavor",
-                ["auto", "lattice", "stream"],
-                help="Camelot extraction mode:\n- auto: Auto select\n- lattice: For bordered tables\n- stream: For unbordered tables"
-            )
+        if is_image_file:
+            # 检测是否在Streamlit Cloud环境
+            import os
+            is_streamlit_cloud = os.environ.get('STREAMLIT_CLOUD', '').lower() == 'true' or \
+                                'STREAMLIT_SHARING' in os.environ or \
+                                os.path.exists('/home/appuser')
+            
+            # 图像文件：选择检测引擎
+            if is_streamlit_cloud:
+                # Streamlit Cloud环境：仅提供PaddleOCR
+                method = "PaddleOCR"
+                st.info("🌐 **Streamlit Cloud**: PaddleOCR is available for online use. Transformer is only available in local deployment.")
+                st.markdown("""
+                <div style='background-color: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+                    <strong>💡 Local Deployment:</strong> For Transformer support, please deploy locally. 
+                    See <a href='https://github.com/livezingy/PDFDataExtractor/blob/main/docs/deployment_guide.md' target='_blank'>Deployment Guide</a> for details.
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                # 本地环境：提供两个选项
+                method = st.selectbox(
+                    "Detection Engine",
+                    ["PaddleOCR", "Transformer"],
+                    index=0,  # 默认PaddleOCR
+                    help="Select table detection engine for image files:\n"
+                         "- PaddleOCR: Recommended for Chinese documents, faster, with HTML output\n"
+                         "- Transformer: Available only in local deployment, may be more accurate for complex tables"
+                )
+                
+                # 显示引擎说明
+                if method == "PaddleOCR":
+                    st.info("💡 **PaddleOCR**: Best for Chinese documents, faster processing, supports HTML output")
+                else:
+                    st.warning("⚠️ **Transformer**: Requires local deployment with sufficient resources. Not available in Streamlit Cloud.")
+            
+            flavor = None  # 图像文件不需要flavor
         else:
-            flavor = "auto"
+            # PDF文件：选择提取方法
+            method = st.selectbox(
+                "Extraction Method",
+                ["PDFPlumber", "Camelot"],
+                index=0,  # 默认PDFPlumber
+                help="Select table extraction method for PDF files"
+            )
+            
+            # Flavor selection (changes dynamically based on method)
+            if method == "PDFPlumber":
+                flavor = st.selectbox(
+                    "Flavor",
+                    ["auto", "lines", "text"],
+                    help="PDFPlumber extraction mode:\n- auto: Auto select\n- lines: For bordered tables\n- text: For unbordered tables"
+                )
+            elif method == "Camelot":
+                flavor = st.selectbox(
+                    "Flavor",
+                    ["auto", "lattice", "stream"],
+                    help="Camelot extraction mode:\n- auto: Auto select\n- lattice: For bordered tables\n- stream: For unbordered tables"
+                )
+            else:
+                flavor = "auto"
         
-        # Parameter configuration
-        st.markdown("---")
-        st.subheader("⚙️ Parameter Configuration")
-        
-        param_config = render_param_config(method.lower(), flavor.lower() if flavor != "auto" else None)
+        # Parameter configuration (仅PDF文件显示)
+        if not is_image_file:
+            st.markdown("---")
+            st.subheader("⚙️ Parameter Configuration")
+            param_config = render_param_config(method.lower(), flavor.lower() if flavor and flavor != "auto" else None)
+        else:
+            param_config = None
         
         st.markdown("---")
         

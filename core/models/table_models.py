@@ -97,23 +97,92 @@ class TableModels:
                     return "microsoft/table-transformer-detection"
                 return "microsoft/table-transformer-structure-recognition"
 
+            def _normalize_path(path: str) -> str:
+                """规范化路径，移除相对路径符号"""
+                if not path:
+                    return path
+                # 规范化路径（移除 .\ 和 ..\ 等）
+                normalized = os.path.normpath(path)
+                # 如果是相对路径，转换为绝对路径
+                if not os.path.isabs(normalized):
+                    base_dir = get_app_dir()
+                    normalized = os.path.join(base_dir, normalized)
+                # 再次规范化，确保路径格式正确
+                return os.path.normpath(normalized)
+
+            def _is_valid_local_path(path: str) -> bool:
+                """检查路径是否是有效的本地路径（不是 HuggingFace repo ID）"""
+                if not path:
+                    return False
+                # 检查是否是绝对路径或相对路径
+                # HuggingFace repo ID 格式：不包含路径分隔符或只包含斜杠（用于组织/仓库名）
+                # 本地路径通常包含反斜杠（Windows）或正斜杠（Unix），且不以字母开头
+                if os.path.isabs(path) or os.path.sep in path or '/' in path:
+                    return True
+                # 如果路径看起来像 repo ID（如 "microsoft/table-transformer-detection"）
+                # 但包含路径分隔符，可能是相对路径
+                if '\\' in path or path.startswith('./') or path.startswith('../'):
+                    return True
+                return False
+
             def _load_model_and_processor(path_or_id: str, kind: str):
+                # 规范化路径
+                normalized_path = _normalize_path(path_or_id) if _is_valid_local_path(path_or_id) else path_or_id
+                
+                # #region agent log
+                from core.utils.debug_utils import write_debug_log
+                try:
+                    write_debug_log(
+                        location="table_models.py:100",
+                        message="loading model and processor",
+                        data={
+                            "kind": kind,
+                            "original_path": path_or_id,
+                            "normalized_path": normalized_path,
+                            "is_valid_local": _is_valid_local_path(path_or_id),
+                            "path_exists": os.path.exists(normalized_path) if normalized_path else False
+                        },
+                        hypothesis_id="L"
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Debug log write failed: {e}")
+                # #endregion
+                
                 # 优先尝试本地文件
                 try:
+                    # 使用规范化后的路径
                     model = TableTransformerForObjectDetection.from_pretrained(
-                        path_or_id,
+                        normalized_path,
                         local_files_only=True
                     ).to(self.device)
                     processor = AutoImageProcessor.from_pretrained(
-                        path_or_id,
+                        normalized_path,
                         local_files_only=True
                     )
-                    self.logger.info(f"[TableModels] Loaded {kind} from local path: {path_or_id}")
+                    self.logger.info(f"[TableModels] Loaded {kind} from local path: {normalized_path}")
                     return model, processor
                 except Exception as e_local:
-                    self.logger.warning(f"[TableModels] Local {kind} not found at {path_or_id}, fallback to Hugging Face Hub. Reason: {e_local}")
+                    self.logger.warning(f"[TableModels] Local {kind} not found at {normalized_path}, fallback to Hugging Face Hub. Reason: {e_local}")
                     # 回落到 Hugging Face Hub
                     model_id = _resolve_model_id(path_or_id, kind)
+                    
+                    # #region agent log
+                    try:
+                        write_debug_log(
+                            location="table_models.py:114",
+                            message="falling back to HuggingFace Hub",
+                            data={
+                                "kind": kind,
+                                "local_path": normalized_path,
+                                "hf_model_id": model_id,
+                                "local_error": str(e_local)
+                            },
+                            hypothesis_id="L"
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Debug log write failed: {e}")
+                    # #endregion
+                    
                     model = TableTransformerForObjectDetection.from_pretrained(model_id).to(self.device)
                     processor = AutoImageProcessor.from_pretrained(model_id)
                     self.logger.info(f"[TableModels] Downloaded {kind} model from HF Hub: {model_id}")

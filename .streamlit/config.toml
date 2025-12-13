@@ -4,10 +4,14 @@
 [server]
 # 最大上传文件大小（MB）
 # Streamlit Cloud默认限制为200MB，这里设置为10MB用于测试小文件
+# 注意：Streamlit Cloud免费版有资源限制，建议使用较小的测试文件
 maxUploadSize = 10
+# 最大消息大小（MB）
+maxMessageSize = 200
 
 # 启用CORS
-enableCORS = false
+# 注意：如果启用XSRF保护，CORS必须为true
+enableCORS = true
 
 # 启用XSRF保护
 enableXsrfProtection = true
@@ -34,7 +38,8 @@ font = "sans serif"
 [runner]
 # 运行模式
 magicEnabled = true
-installTracer = false
+# installTracer 选项在新版本Streamlit中已移除
+# installTracer = false
 fastReruns = true
 
 [client]

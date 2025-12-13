@@ -179,13 +179,18 @@ def process_pdf_streamlit(
         # 3. 根据文件类型分支处理
         ext = os.path.splitext(pdf_path)[1].lower()
 
-        # ========= 3A. 处理图片文件：使用与GUI一致的Transformer流程 =========
+        # ========= 3A. 处理图片文件：根据选择的引擎处理 =========
         if ext in ['.png', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff']:
+            # 获取选择的检测引擎（从method参数，默认为paddleocr）
+            # method可能是'PaddleOCR'或'Transformer'（首字母大写）
+            method_lower = method.lower() if method else 'paddleocr'
+            detection_engine = method_lower if method_lower in ['paddleocr', 'transformer'] else 'paddleocr'
+            
             results['detection_steps'].append({
                 'step': 2,
                 'name': 'Image Detected',
                 'status': 'info',
-                'message': 'Image file detected. Using Transformer pipeline (same as GUI)'
+                'message': f'Image file detected. Using {detection_engine.upper()} engine'
             })
 
             try:
@@ -194,30 +199,18 @@ def process_pdf_streamlit(
                 if image.mode != "RGB":
                     image = image.convert("RGB")
 
-                # 初始化 TableParser（与 GUI 保持一致的配置来源）
-                app_cfg = AppConfig().DEFAULT_CONFIG if AppConfig else {}
-                table_parser = TableParser(app_cfg) if TableParser else None
-                if not table_parser:
-                    raise RuntimeError("TableParser not available")
-
-                # 运行检测与解析
-                parsing = asyncio.run(table_parser.parser_image(image, params))
-
-                # 规范化结果
-                extracted = parsing.get('tables', []) if isinstance(parsing, dict) else []
-                results['detection_steps'].append({
-                    'step': 3,
-                    'name': 'Transformer Processing',
-                    'status': 'success' if parsing.get('success', True) else 'error',
-                    'message': f"Transformer parsed {len(extracted)} table(s)"
-                })
+                # 根据选择的引擎处理
+                if detection_engine == 'paddleocr':
+                    extracted = _process_image_with_paddleocr(image, params, results)
+                else:  # transformer
+                    extracted = _process_image_with_transformer(image, params, results)
 
                 # 转换为Streamlit显示格式
                 results['extracted_tables'] = format_tables_for_streamlit(extracted)
 
-                # 记录参数信息（方法固定为transformer）
+                # 记录参数信息
                 results['extraction_params'] = {
-                    'method': 'transformer',
+                    'method': detection_engine,
                     'flavor': None
                 }
 
@@ -226,7 +219,7 @@ def process_pdf_streamlit(
                 logger.error(f"[Streamlit] Image processing failed: {e}", exc_info=True)
                 results['detection_steps'].append({
                     'step': 3,
-                    'name': 'Transformer Processing',
+                    'name': f'{detection_engine.upper()} Processing',
                     'status': 'error',
                     'message': f'Processing failed: {str(e)}'
                 })
@@ -480,7 +473,7 @@ def format_tables_for_streamlit(tables: List[Dict]) -> List[Dict]:
     格式化表格结果供Streamlit显示
     
     Args:
-        tables: 原始表格列表（来自TableProcessor）
+        tables: 原始表格列表（来自TableProcessor或PaddleOCR/Transformer）
         
     Returns:
         list: 格式化后的表格列表
@@ -494,13 +487,24 @@ def format_tables_for_streamlit(tables: List[Dict]) -> List[Dict]:
             # 获取表格数据
             # TableProcessor返回的格式：
             # {'table': wrapper/table_obj, 'bbox': ..., 'score': ..., 'source': ..., ...}
+            # PaddleOCR返回的格式：
+            # {'df': DataFrame, 'bbox': ..., 'score': ..., 'method': 'paddleocr', ...}
+            # Transformer返回的格式：
+            # {'table': DataFrame, 'bbox': ..., 'score': ..., ...}
+            
             table_obj = table.get('table')
             table_data = None
             rows = 0
             cols = 0
             
+            # 首先检查是否有直接的df键（PaddleOCR格式）
+            if 'df' in table and table['df'] is not None:
+                table_data = table['df']
+                if isinstance(table_data, pd.DataFrame):
+                    rows = table_data.shape[0] if not table_data.empty else 0
+                    cols = table_data.shape[1] if not table_data.empty else 0
             # 处理不同的表格对象类型
-            if table_obj is not None:
+            elif table_obj is not None:
                 # 如果是PDFPlumberTableWrapper，数据在df属性中
                 if hasattr(table_obj, 'df'):
                     table_data = table_obj.df
@@ -534,23 +538,32 @@ def format_tables_for_streamlit(tables: List[Dict]) -> List[Dict]:
                     rows = table_data.shape[0] if not table_data.empty else 0
                     cols = table_data.shape[1] if not table_data.empty else 0
             
-            # 获取source信息，解析method和flavor
-            source = table.get('source', 'unknown')
-            method = 'unknown'
-            flavor = 'unknown'
+            # 获取method和flavor信息
+            # 优先使用table字典中的method字段（PaddleOCR/Transformer格式）
+            method = table.get('method', 'unknown')
+            flavor = table.get('flavor', 'unknown')
             
-            if 'pdfplumber' in source:
-                method = 'pdfplumber'
-                if 'lines' in source:
-                    flavor = 'lines'
-                elif 'text' in source:
-                    flavor = 'text'
-            elif 'camelot' in source:
-                method = 'camelot'
-                if 'lattice' in source:
-                    flavor = 'lattice'
-                elif 'stream' in source:
-                    flavor = 'stream'
+            # 如果没有method字段，从source解析（PDFPlumber/Camelot格式）
+            if method == 'unknown':
+                source = table.get('source', 'unknown')
+                if 'pdfplumber' in source:
+                    method = 'pdfplumber'
+                    if 'lines' in source:
+                        flavor = 'lines'
+                    elif 'text' in source:
+                        flavor = 'text'
+                elif 'camelot' in source:
+                    method = 'camelot'
+                    if 'lattice' in source:
+                        flavor = 'lattice'
+                    elif 'stream' in source:
+                        flavor = 'stream'
+                elif 'paddleocr' in source.lower() or method == 'paddleocr':
+                    method = 'paddleocr'
+                    flavor = None
+                elif 'transformer' in source.lower() or method == 'transformer':
+                    method = 'transformer'
+                    flavor = None
             
             # 获取页面号（从table对象或bbox推断）
             page_num = table.get('page_num', 0)
@@ -577,6 +590,223 @@ def format_tables_for_streamlit(tables: List[Dict]) -> List[Dict]:
     
     return formatted_tables
 
+def _process_image_with_paddleocr(image, params: Dict[str, Any], results: Dict[str, Any]) -> List[Dict]:
+    """
+    使用PaddleOCR处理图像文件
+    
+    Args:
+        image: PIL Image对象
+        params: 处理参数
+        results: 结果字典（用于更新检测步骤）
+        
+    Returns:
+        List[Dict]: 提取的表格列表
+    """
+    try:
+        from core.engines.factory import EngineFactory
+        
+        results['detection_steps'].append({
+            'step': 3,
+            'name': 'PaddleOCR Initialization',
+            'status': 'info',
+            'message': 'Initializing PaddleOCR engine...'
+        })
+        
+        # 创建PaddleOCR检测引擎
+        detection_engine = EngineFactory.create_detection('paddleocr', use_gpu=False)
+        
+        # 加载模型
+        if not detection_engine.load_models():
+            raise RuntimeError("Failed to load PaddleOCR models")
+        
+        results['detection_steps'].append({
+            'step': 4,
+            'name': 'PaddleOCR Table Detection',
+            'status': 'info',
+            'message': 'Detecting tables in image...'
+        })
+        
+        # 检测表格
+        tables = detection_engine.detect_tables(image)
+        
+        if not tables:
+            results['detection_steps'].append({
+                'step': 5,
+                'name': 'PaddleOCR Processing',
+                'status': 'warning',
+                'message': 'No tables detected in image'
+            })
+            return []
+        
+        results['detection_steps'].append({
+            'step': 5,
+            'name': 'PaddleOCR Table Detection',
+            'status': 'success',
+            'message': f'Detected {len(tables)} table(s)'
+        })
+        
+        # 识别每个表格的结构
+        extracted_tables = []
+        base_step = 6
+        for idx, table in enumerate(tables):
+            bbox = table['bbox']
+            confidence = table['confidence']
+            
+            # 裁剪表格区域
+            table_image = image.crop(bbox)
+            
+            results['detection_steps'].append({
+                'step': base_step + idx * 2,
+                'name': f'PaddleOCR Structure Recognition (Table {idx+1})',
+                'status': 'info',
+                'message': f'Recognizing structure for table {idx+1}...'
+            })
+            
+            # 识别结构
+            structure = detection_engine.recognize_structure(table_image, return_raw=True)
+            
+            # 如果有HTML输出，尝试解析为DataFrame
+            import pandas as pd
+            df = pd.DataFrame()
+            
+            if structure.get('html'):
+                try:
+                    from io import StringIO
+                    # 尝试从HTML读取表格
+                    html_tables = pd.read_html(StringIO(structure['html']))
+                    if html_tables and len(html_tables) > 0:
+                        df = html_tables[0]
+                        logger.info(f"Successfully parsed HTML table with shape: {df.shape}")
+                except Exception as e:
+                    logger.warning(f"Failed to parse HTML table: {e}")
+                    # 如果解析失败，尝试从cell_bbox构建DataFrame（如果可用）
+                    # 注意：PaddleOCR的res中可能包含cell_bbox而不是cells
+                    if structure.get('raw') and structure['raw'].get('res'):
+                        res = structure['raw']['res']
+                        if 'cell_bbox' in res:
+                            # 可以尝试从cell_bbox和OCR结果构建表格
+                            # 这里暂时创建空DataFrame，后续可以增强
+                            logger.debug("cell_bbox available but HTML parsing failed")
+            
+            # 转换为标准格式（与TableProcessor返回格式兼容）
+            table_data = {
+                'table': df,  # 使用'table'键以兼容format_tables_for_streamlit
+                'df': df,     # 同时提供'df'键
+                'bbox': bbox,
+                'score': confidence,
+                'source': 'paddleocr',
+                'method': 'paddleocr',
+                'flavor': None,
+                'structure': structure,
+                'page_num': 1  # 图像文件默认为第1页
+            }
+            
+            extracted_tables.append(table_data)
+            
+            results['detection_steps'].append({
+                'step': base_step + idx * 2 + 1,
+                'name': f'PaddleOCR Structure Recognition (Table {idx+1})',
+                'status': 'success',
+                'message': f'Table {idx+1} structure recognized (shape: {df.shape if not df.empty else "empty"})'
+            })
+        
+        final_step = base_step + len(tables) * 2
+        results['detection_steps'].append({
+            'step': final_step,
+            'name': 'PaddleOCR Processing',
+            'status': 'success',
+            'message': f'PaddleOCR processed {len(extracted_tables)} table(s) successfully'
+        })
+        
+        return extracted_tables
+        
+    except ImportError as e:
+        logger.error(f"PaddleOCR not available: {e}")
+        results['detection_steps'].append({
+            'step': 3,
+            'name': 'PaddleOCR Processing',
+            'status': 'error',
+            'message': f'PaddleOCR not available: {str(e)}. Please install: pip install paddleocr paddlepaddle'
+        })
+        return []
+    except Exception as e:
+        logger.error(f"PaddleOCR processing failed: {e}", exc_info=True)
+        results['detection_steps'].append({
+            'step': 3,
+            'name': 'PaddleOCR Processing',
+            'status': 'error',
+            'message': f'Processing failed: {str(e)}'
+        })
+        return []
+
+
+def _process_image_with_transformer(image, params: Dict[str, Any], results: Dict[str, Any]) -> List[Dict]:
+    """
+    使用Transformer处理图像文件（仅本地环境）
+    
+    Args:
+        image: PIL Image对象
+        params: 处理参数
+        results: 结果字典（用于更新检测步骤）
+        
+    Returns:
+        List[Dict]: 提取的表格列表
+    """
+    # 检测是否在Streamlit Cloud环境
+    is_streamlit_cloud = os.environ.get('STREAMLIT_CLOUD', '').lower() == 'true' or \
+                        'STREAMLIT_SHARING' in os.environ or \
+                        os.path.exists('/home/appuser')
+    
+    if is_streamlit_cloud:
+        error_msg = "Transformer is not available in Streamlit Cloud. Please use PaddleOCR or deploy locally."
+        logger.error(error_msg)
+        results['detection_steps'].append({
+            'step': 3,
+            'name': 'Transformer Processing',
+            'status': 'error',
+            'message': error_msg + ' See deployment guide for local setup.'
+        })
+        return []
+    
+    try:
+        # 初始化 TableParser（与 GUI 保持一致的配置来源）
+        app_cfg = AppConfig().DEFAULT_CONFIG if AppConfig else {}
+        table_parser = TableParser(app_cfg) if TableParser else None
+        if not table_parser:
+            raise RuntimeError("TableParser not available. Transformer requires local deployment.")
+
+        results['detection_steps'].append({
+            'step': 3,
+            'name': 'Transformer Initialization',
+            'status': 'info',
+            'message': 'Initializing Transformer models...'
+        })
+
+        # 运行检测与解析
+        parsing = asyncio.run(table_parser.parser_image(image, params))
+
+        # 规范化结果
+        extracted = parsing.get('tables', []) if isinstance(parsing, dict) else []
+        results['detection_steps'].append({
+            'step': 4,
+            'name': 'Transformer Processing',
+            'status': 'success' if parsing.get('success', True) else 'error',
+            'message': f"Transformer parsed {len(extracted)} table(s)"
+        })
+
+        return extracted
+        
+    except Exception as e:
+        logger.error(f"Transformer processing failed: {e}", exc_info=True)
+        results['detection_steps'].append({
+            'step': 3,
+            'name': 'Transformer Processing',
+            'status': 'error',
+            'message': f'Processing failed: {str(e)}. Transformer requires local deployment with sufficient resources.'
+        })
+        return []
+
+
 def check_dependencies() -> Dict[str, bool]:
     """
     检查依赖是否可用
@@ -584,10 +814,16 @@ def check_dependencies() -> Dict[str, bool]:
     Returns:
         dict: 依赖状态字典
     """
+    # 检测是否在Streamlit Cloud环境
+    is_streamlit_cloud = os.environ.get('STREAMLIT_CLOUD', '').lower() == 'true' or \
+                        'STREAMLIT_SHARING' in os.environ or \
+                        os.path.exists('/home/appuser')
+    
     dependencies = {
         'pdfplumber': False,
         'camelot': False,
-        'transformer': False
+        'transformer': False,
+        'paddleocr': False
     }
     
     # 检查pdfplumber
@@ -611,11 +847,26 @@ def check_dependencies() -> Dict[str, bool]:
         logger.warning(f"Camelot import failed: {e}")
         pass
     
-    # 检查transformer（可选，需要模型文件）
+    # 检查transformer（仅在本地环境）
+    if not is_streamlit_cloud:
+        try:
+            from core.models.table_parser import TableParser
+            dependencies['transformer'] = True
+        except (ImportError, Exception):
+            pass
+    else:
+        # Streamlit Cloud环境：Transformer不可用
+        dependencies['transformer'] = False
+    
+    # 检查paddleocr
     try:
-        from core.models.table_parser import TableParser
-        dependencies['transformer'] = True
-    except (ImportError, Exception):
+        from core.engines.factory import EngineFactory
+        if EngineFactory.is_detection_registered('paddleocr'):
+            # 尝试创建引擎实例检查是否可用
+            engine = EngineFactory.create_detection('paddleocr', use_gpu=False)
+            dependencies['paddleocr'] = engine.is_available()
+    except (ImportError, Exception) as e:
+        logger.debug(f"PaddleOCR check failed: {e}")
         pass
     
     return dependencies

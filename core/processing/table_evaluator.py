@@ -227,11 +227,12 @@ class TableEvaluator:
 
     def _structural_score(self, df, features):
         """
-        结构评分：覆盖度 × 网格一致性 × 合并合理性 × 基础属性完备度
+        结构评分：覆盖度 × 网格一致性 × 合并合理性 × 基础属性完备度 × 单元格对齐度（新增）
         - 覆盖度：实际单元与期望网格的匹配程度，结合 df 的非空占比
         - 网格一致性：shape/rows/columns/单元格 bbox 的一致性
         - 合并合理性：仅对 Camelot lattice 使用边框缺失推断合并程度（越合理得分越高）
         - 基础属性完备度：bbox/rows/columns 是否存在
+        - 单元格对齐度（新增）：检查单元格是否对齐到网格线，提高评分精度
         """
         rows, cols = features.get('shape', (0, 0))
         expected_cells = max(1, rows * cols)
@@ -296,15 +297,83 @@ class TableEvaluator:
         base_ok += 1 if rows_pos else 0
         base_score = base_ok / 3 if 3 > 0 else 1.0
 
-        # 综合（乘法抑制单项严重短板）
+        # 5) 单元格对齐度（新增）：检查单元格边界是否对齐到网格线
+        alignment_score = self._calculate_cell_alignment(cells_list, columns, rows_pos)
+
+        # 综合（乘法抑制单项严重短板，加入对齐度）
         final = np.prod([
             max(0.05, coverage_score),
             max(0.05, grid_consistency),
             max(0.05, merge_score),
             max(0.05, base_score),
+            max(0.05, alignment_score),  # 新增对齐度
         ]) ** 0.5  # 减弱过度惩罚
         # 调试信息已移除
         return float(max(0.0, min(1.0, final)))
+    
+    def _calculate_cell_alignment(self, cells_list, columns, rows_pos):
+        """
+        计算单元格对齐度
+        
+        Args:
+            cells_list: 单元格列表
+            columns: 列坐标列表
+            rows_pos: 行坐标列表
+            
+        Returns:
+            float: 对齐度分数 (0-1)
+        """
+        if not cells_list or not columns or not rows_pos:
+            return 0.8  # 默认中等分数
+        
+        try:
+            columns_np = np.array(columns, dtype=float)
+            rows_np = np.array(rows_pos, dtype=float)
+            
+            alignment_errors = []
+            tolerance_factor = 0.05  # 允许5%的误差
+            
+            for c in cells_list:
+                bbox = c.get('bbox') if isinstance(c, dict) else None
+                if bbox is None:
+                    continue
+                
+                x0, y0, x1, y1 = bbox
+                
+                # 计算单元格边界与最近网格线的距离
+                if len(columns_np) > 0:
+                    # 左边界应该接近某条列线
+                    dist_left = np.min(np.abs(columns_np - x0))
+                    # 右边界应该接近某条列线
+                    dist_right = np.min(np.abs(columns_np - x1))
+                    # 归一化到平均列宽
+                    avg_col_width = np.mean(np.diff(columns_np)) if len(columns_np) > 1 else 1.0
+                    if avg_col_width > 0:
+                        col_error = (dist_left + dist_right) / (2 * avg_col_width)
+                        alignment_errors.append(col_error)
+                
+                if len(rows_np) > 0:
+                    # 上边界应该接近某条行线
+                    dist_top = np.min(np.abs(rows_np - y0))
+                    # 下边界应该接近某条行线
+                    dist_bottom = np.min(np.abs(rows_np - y1))
+                    # 归一化到平均行高
+                    avg_row_height = np.mean(np.diff(rows_np)) if len(rows_np) > 1 else 1.0
+                    if avg_row_height > 0:
+                        row_error = (dist_top + dist_bottom) / (2 * avg_row_height)
+                        alignment_errors.append(row_error)
+            
+            if not alignment_errors:
+                return 0.8
+            
+            # 计算平均对齐误差
+            avg_error = np.mean(alignment_errors)
+            # 误差越小，分数越高
+            alignment_score = 1.0 / (1.0 + avg_error * 2.0)
+            return float(max(0.0, min(1.0, alignment_score)))
+        
+        except Exception:
+            return 0.8  # 出错时返回默认值
 
     def _detect_merge_cells(self, features):
         """
@@ -460,15 +529,17 @@ class TableEvaluator:
 
     def _content_score(self, df, features):
         """
-        内容评分：类型一致性 × 逻辑一致性 × 标题/头部合理性
+        内容评分：类型一致性 × 逻辑一致性 × 标题/头部合理性 × 数据完整性（新增）
         - 类型一致性：每列主导类型占比（数字/日期/文本），辅以熵正则
         - 逻辑一致性：沿用现有逻辑校验并加入数值非负/单元格数量匹配
         - 头部合理性：首行是否更像表头（文本比例高、去重率高）
+        - 数据完整性（新增）：检查数据是否完整，避免大量缺失值
         """
         if df is None or df.empty:
             type_score = 0.6
             logic_score = self._check_logic(pd.DataFrame(), features)
             header_score = 0.6
+            completeness_score = 0.6
         else:
             # 类型一致性
             type_scores = []
@@ -524,10 +595,19 @@ class TableEvaluator:
                 header_score = 0.5*text_ratio + 0.5*unique_ratio
             except Exception:
                 header_score = 0.6
+            
+            # 数据完整性（新增）：检查非空值比例
+            try:
+                total_cells = df.size
+                non_null_cells = df.notna().sum().sum()
+                completeness_score = non_null_cells / total_cells if total_cells > 0 else 0.0
+            except Exception:
+                completeness_score = 0.6
 
         sub = [type_score, logic_score]
         base = float(np.dot(sub, self.sub_weights["content"]))
-        final = (base * 0.8 + header_score * 0.2)
+        # 加入数据完整性评分
+        final = (base * 0.7 + header_score * 0.15 + completeness_score * 0.15)
         # 调试信息已移除
         return float(max(0.0, min(1.0, final)))
 

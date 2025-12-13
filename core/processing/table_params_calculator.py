@@ -48,16 +48,55 @@ class TableParamsCalculator:
         Returns:
             dict: pdfplumber参数字典
         """
+        # #region agent log
+        from core.utils.debug_utils import write_debug_log
+        try:
+            write_debug_log(
+                location="table_params_calculator.py:39",
+                message="get_pdfplumber_params entry",
+                data={"table_type": table_type},
+                hypothesis_id="A"
+            )
+        except Exception as e:
+            # 如果日志写入失败，至少记录到标准日志
+            self.logger.warning(f"Debug log write failed at entry: {e}")
+        # #endregion
+        
         # 获取线条信息
         h_lines = self.analyzer.line_analysis.get('horizontal_lines', [])
         v_lines = self.analyzer.line_analysis.get('vertical_lines', [])
         h_count = len(h_lines)
         v_count = len(v_lines)
         
+        # #region agent log
+        write_debug_log(
+            location="table_params_calculator.py:54",
+            message="line counts extracted",
+            data={"h_count": h_count, "v_count": v_count},
+            hypothesis_id="B"
+        )
+        # #endregion
+        
         # 动态选择strategy
         if table_type == 'bordered':
             vertical_strategy = 'lines' if v_count >= 5 else 'text'
             horizontal_strategy = 'lines' if h_count >= 10 else 'text'
+            
+            # #region agent log
+            write_debug_log(
+                location="table_params_calculator.py:59",
+                message="strategy selected for bordered table",
+                data={
+                    "vertical_strategy": vertical_strategy,
+                    "horizontal_strategy": horizontal_strategy,
+                    "v_count": v_count,
+                    "h_count": h_count,
+                    "v_threshold_met": v_count >= 5,
+                    "h_threshold_met": h_count >= 10
+                },
+                hypothesis_id="B"
+            )
+            # #endregion
             
             self.logger.debug(
                 f"Bordered table strategy: V={vertical_strategy}(count={v_count}), "
@@ -66,6 +105,20 @@ class TableParamsCalculator:
         else:
             vertical_strategy = 'text'
             horizontal_strategy = 'lines' if h_count >= 3 else 'text'
+            
+            # #region agent log
+            write_debug_log(
+                location="table_params_calculator.py:67",
+                message="strategy selected for unbordered table",
+                data={
+                    "vertical_strategy": vertical_strategy,
+                    "horizontal_strategy": horizontal_strategy,
+                    "h_count": h_count,
+                    "h_threshold_met": h_count >= 3
+                },
+                hypothesis_id="B"
+            )
+            # #endregion
             
             self.logger.debug(
                 f"Unbordered table strategy: V={vertical_strategy}, "
@@ -98,12 +151,83 @@ class TableParamsCalculator:
             'text_y_tolerance': 5
         }
         
-        # 自适应snap_tolerance[0.5, 5]
-        if self.analyzer.char_analysis['min_width'] > 0 and self.analyzer.char_analysis['min_height'] > 0:
+        # 自适应snap_tolerance：根据字符尺寸动态调整上限
+        # #region agent log
+        from core.utils.debug_utils import write_debug_log
+        try:
+            char_analysis = self.analyzer.char_analysis
+            char_min_width = char_analysis.get('min_width', 0) if isinstance(char_analysis, dict) else 0
+            char_min_height = char_analysis.get('min_height', 0) if isinstance(char_analysis, dict) else 0
+            try:
+                write_debug_log(
+                    location="table_params_calculator.py:151",
+                    message="char analysis values before snap_tolerance calculation",
+                    data={
+                        "min_width": char_min_width,
+                        "min_height": char_min_height,
+                        "both_positive": char_min_width > 0 and char_min_height > 0,
+                        "char_analysis_type": type(char_analysis).__name__,
+                        "char_analysis_keys": list(char_analysis.keys()) if isinstance(char_analysis, dict) else []
+                    },
+                    hypothesis_id="A"
+                )
+            except Exception as log_e:
+                # 如果日志写入失败，记录到标准日志
+                self.logger.warning(f"Debug log write failed at char_analysis: {log_e}")
+        except Exception as e:
+            try:
+                write_debug_log(
+                    location="table_params_calculator.py:151",
+                    message="char analysis access failed",
+                    data={"error": str(e)},
+                    hypothesis_id="A"
+                )
+            except:
+                self.logger.warning(f"Debug log write failed for error log: {e}")
+        # #endregion
+        
+        if self.analyzer.char_analysis.get('min_width', 0) > 0 and self.analyzer.char_analysis.get('min_height', 0) > 0:
             min_char_size = min(self.analyzer.char_analysis['min_width'], 
                                self.analyzer.char_analysis['min_height'])
-            params['snap_tolerance'] = min_char_size * 0.3
-            params['snap_tolerance'] = max(0.5, min(params['snap_tolerance'], 5))
+            raw_snap_tolerance = min_char_size * 0.3
+            
+            # 根据字符尺寸动态调整上限：大字体PDF需要更大的容差
+            # 对于大字体（字符尺寸>10pt），允许更大的snap_tolerance
+            if min_char_size > 10:
+                max_snap_tolerance = 15
+            elif min_char_size > 5:
+                max_snap_tolerance = 10
+            else:
+                max_snap_tolerance = 10  # 默认上限
+            
+            params['snap_tolerance'] = max(0.5, min(raw_snap_tolerance, max_snap_tolerance))
+            
+            # #region agent log
+            from core.utils.debug_utils import write_debug_log
+            try:
+                write_debug_log(
+                    location="table_params_calculator.py:170",
+                    message="snap_tolerance calculated and clamped",
+                    data={
+                        "snap_tolerance": params['snap_tolerance'],
+                        "raw_value": raw_snap_tolerance,
+                        "min_char_size": min_char_size,
+                        "max_snap_tolerance": max_snap_tolerance,
+                        "is_valid": 0.5 <= params['snap_tolerance'] <= max_snap_tolerance
+                    },
+                    hypothesis_id="A"
+                )
+            except Exception as e:
+                try:
+                    write_debug_log(
+                        location="table_params_calculator.py:170",
+                        message="snap_tolerance log failed",
+                        data={"error": str(e), "snap_tolerance": params.get('snap_tolerance')},
+                        hypothesis_id="A"
+                    )
+                except:
+                    self.logger.warning(f"Debug log write failed for snap_tolerance: {e}")
+            # #endregion
             
             self.logger.debug(
                 f"snap_tolerance={params['snap_tolerance']:.2f} "
@@ -166,32 +290,44 @@ class TableParamsCalculator:
                 f"(max_min_size={max_min_size:.2f})"
             )
         
-        # 自适应min_words_vertical[3, 10]
+        # 自适应min_words_vertical：根据文本行数动态调整最小值
         if self.analyzer.text_line_analysis['total_lines'] > 0:
-            min_words = int(self.analyzer.text_line_analysis['total_lines'] * 0.2)
-            params['min_words_vertical'] = max(3, min(min_words, 10))
+            total_lines = self.analyzer.text_line_analysis['total_lines']
+            # 对于小表格（少于10行），使用更宽松的要求
+            if total_lines < 10:
+                min_words = max(1, min(int(total_lines * 0.2), 5))
+            else:
+                min_words = max(3, min(int(total_lines * 0.2), 10))
+            params['min_words_vertical'] = min_words
             
             self.logger.debug(
                 f"min_words_vertical={params['min_words_vertical']} "
-                f"(total_lines={self.analyzer.text_line_analysis['total_lines']})"
+                f"(total_lines={total_lines}, dynamic_range=True)"
             )
         
-        # 自适应text_x_tolerance[1, 10]
-        if self.analyzer.char_analysis['mode_width'] > 0:
-            params['text_x_tolerance'] = self.analyzer.char_analysis['mode_width'] * 1.5
-            params['text_x_tolerance'] = max(1, min(params['text_x_tolerance'], 10))
+        # 自适应text_x_tolerance：根据字符尺寸动态调整上限
+        # 优先使用mode_width，如果不可用再回退到min_width
+        if self.analyzer.char_analysis.get('mode_width', 0) > 0:
+            base_tolerance = self.analyzer.char_analysis['mode_width'] * 1.5
+            # 对于大字体，允许更大的容差（上限为字符宽度的3倍，但至少为10）
+            max_tolerance = max(10, self.analyzer.char_analysis['mode_width'] * 3)
+            params['text_x_tolerance'] = max(1, min(base_tolerance, max_tolerance))
             
             self.logger.debug(
                 f"text_x_tolerance={params['text_x_tolerance']:.2f} "
-                f"(mode_width={self.analyzer.char_analysis['mode_width']:.2f})"
+                f"(mode_width={self.analyzer.char_analysis['mode_width']:.2f}, "
+                f"max_tolerance={max_tolerance:.2f})"
             )
-        elif self.analyzer.char_analysis['min_width'] > 0:
-            params['text_x_tolerance'] = self.analyzer.char_analysis['min_width'] * 1.5
-            params['text_x_tolerance'] = max(1, min(params['text_x_tolerance'], 10))
+        elif self.analyzer.char_analysis.get('min_width', 0) > 0:
+            base_tolerance = self.analyzer.char_analysis['min_width'] * 1.5
+            # 回退到min_width时，使用较小的上限
+            max_tolerance = max(10, self.analyzer.char_analysis['min_width'] * 3)
+            params['text_x_tolerance'] = max(1, min(base_tolerance, max_tolerance))
             
             self.logger.debug(
                 f"text_x_tolerance={params['text_x_tolerance']:.2f} "
-                f"(min_width={self.analyzer.char_analysis['min_width']:.2f})"
+                f"(min_width={self.analyzer.char_analysis['min_width']:.2f}, "
+                f"max_tolerance={max_tolerance:.2f}, fallback=True)"
             )
         
         # 自适应text_y_tolerance[1, 8]
@@ -205,7 +341,22 @@ class TableParamsCalculator:
             )
         
         # 参数验证
+        params_before_validation = params.copy()
         params = self._validate_params(params)
+        
+        # #region agent log
+        params_changed = {k: v for k, v in params.items() if k in params_before_validation and params_before_validation[k] != v}
+        write_debug_log(
+            location="table_params_calculator.py:208",
+            message="final params after validation",
+            data={
+                "params": params,
+                "params_changed": params_changed,
+                "validation_applied": len(params_changed) > 0
+            },
+            hypothesis_id="C"
+        )
+        # #endregion
         
         self.logger.debug(f"Final pdfplumber params: {params}")
         
@@ -252,7 +403,8 @@ class TableParamsCalculator:
             line_widths = self.analyzer.line_analysis.get('line_widths', [])
             if line_widths and len(line_widths) > 0:
                 # 计算线条宽度众数
-                mode_line_width = self.analyzer._get_mode_with_fallback(line_widths)
+                from core.processing.page_feature_analyzer import PageFeatureAnalyzer
+                mode_line_width = PageFeatureAnalyzer._get_mode_with_fallback(line_widths)
                 if mode_line_width > 0:
                     # 计算PDF到图像的缩放比例
                     pdf_to_image_ratio = min(image_shape[0] / self.page.height, 
@@ -270,13 +422,23 @@ class TableParamsCalculator:
                         line_scale_h = image_shape[1] / desired_kernel_length
                         # 取较小值（保守策略）
                         line_scale = min(line_scale_v, line_scale_h)
-                        params['line_scale'] = max(15, min(int(line_scale), 50))
+                        
+                        # 根据线条宽度动态调整上限：细线条需要更大的line_scale
+                        if mode_line_width < 0.5:
+                            max_line_scale = 100  # 细线条（<0.5pt）需要更大的scale
+                        elif mode_line_width < 1.0:
+                            max_line_scale = 75   # 中等线条（0.5-1.0pt）
+                        else:
+                            max_line_scale = 50   # 粗线条（>=1.0pt）使用较小的scale
+                        
+                        params['line_scale'] = max(15, min(int(line_scale), max_line_scale))
                         
                         self.logger.debug(
                             f"line_scale={params['line_scale']} "
                             f"(mode_line_width={mode_line_width:.2f}pt, "
                             f"mode_line_width_image={mode_line_width_image:.2f}px, "
-                            f"desired_kernel_length={desired_kernel_length:.2f}px)"
+                            f"desired_kernel_length={desired_kernel_length:.2f}px, "
+                            f"max_line_scale={max_line_scale})"
                         )
                     else:
                         params['line_scale'] = 40  # 默认值
@@ -353,17 +515,26 @@ class TableParamsCalculator:
             # 默认值
             params['edge_tol'] = 50
         
-        # row_tol: 最小字符高度
-        if self.analyzer.char_analysis.get('min_height', 0) > 0:
-            #取字符高度的众数，且向上取整
-            params['row_tol'] = math.ceil(self.analyzer.char_analysis['mode_height'])#int(self.analyzer.char_analysis['mode_height']  + 0.5)
+        # row_tol: 统一使用mode_height，如果不可用再回退到min_height
+        if self.analyzer.char_analysis.get('mode_height', 0) > 0:
+            # 使用字符高度的众数，且向上取整
+            params['row_tol'] = math.ceil(self.analyzer.char_analysis['mode_height'])
+            # 上限应该基于mode_height，而不是min_height（保持逻辑一致性）
+            max_row_tol = self.analyzer.char_analysis['mode_height'] * 1.5
+            params['row_tol'] = max(2, min(params['row_tol'], max_row_tol))
             
-            
-            params['row_tol'] = max(2,min(params['row_tol'], self.analyzer.char_analysis['min_height'] * 1.5))
-
             self.logger.debug(
                 f"row_tol={params['row_tol']:.2f} "
-                f"(mode_char_height={self.analyzer.char_analysis['mode_height']:.2f})"
+                f"(mode_char_height={self.analyzer.char_analysis['mode_height']:.2f}, "
+                f"max_row_tol={max_row_tol:.2f})"
+            )
+        elif self.analyzer.char_analysis.get('min_height', 0) > 0:
+            # 如果mode_height不可用，回退到min_height
+            params['row_tol'] = max(2, min(self.analyzer.char_analysis['min_height'], 10))
+            
+            self.logger.debug(
+                f"row_tol={params['row_tol']:.2f} "
+                f"(min_char_height={self.analyzer.char_analysis['min_height']:.2f}, fallback=True)"
             )
         else:
             params['row_tol'] = 2  # 默认值
@@ -443,14 +614,16 @@ class TableParamsCalculator:
         Returns:
             dict: 验证并修正后的参数
         """
+        # 注意：这些边界值仅作为最后的保护措施
+        # 实际参数范围应该根据页面元素性质动态调整（已在各自的计算逻辑中实现）
         bounds = {
-            'snap_tolerance': (0.5, 10),
+            'snap_tolerance': (0.5, 15),  # 上限已根据字符尺寸动态调整，这里作为最大保护值
             'join_tolerance': (1, 10),
             'edge_min_length': (1, 30),
             'intersection_tolerance': (1, 10),
-            'min_words_vertical': (3, 10),
+            'min_words_vertical': (1, 10),  # 最小值已根据文本行数动态调整
             'min_words_horizontal': (1, 5),
-            'text_x_tolerance': (1, 10),
+            'text_x_tolerance': (1, 30),  # 上限已根据字符尺寸动态调整，这里作为最大保护值
             'text_y_tolerance': (1, 8)
         }
         

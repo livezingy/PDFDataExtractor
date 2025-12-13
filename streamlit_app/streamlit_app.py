@@ -231,30 +231,38 @@ def main():
         # Process button
         if st.button("🚀 Start Extraction", type="primary", use_container_width=True):
             # Get configuration
-            method = sidebar_config.get('method', 'PDFPlumber').lower()
+            method = sidebar_config.get('method', 'PDFPlumber')
             flavor = sidebar_config.get('flavor', 'auto')
             # Use default score threshold (0.6)
             score_threshold = 0.6
             
+            # 判断文件类型
+            is_image = uploaded_file.type.startswith('image/') if uploaded_file else False
+            
             # Processing parameters
+            # 对于PDF文件，method需要转换为小写（pdfplumber/camelot）
+            # 对于图像文件，method保持原样（PaddleOCR/Transformer）
+            method_for_params = method.lower() if not is_image else method
+            
             params = {
-                'table_method': method,
-                'table_flavor': flavor,
+                'table_method': method_for_params,
+                'table_flavor': flavor.lower() if flavor else None,
                 'table_score_threshold': score_threshold,
                 'pages': 'all'
             }
             
             # Process file
-            with st.spinner("Processing PDF file, please wait..."):
+            spinner_text = "Processing image file, please wait..." if is_image else "Processing PDF file, please wait..."
+            with st.spinner(spinner_text):
                 try:
                     # Save uploaded file to temporary directory
                     temp_file_path = save_uploaded_file(uploaded_file)
                     st.session_state.processing_state['temp_file_path'] = temp_file_path
                     
-                    # Process PDF
+                    # Process file (PDF or Image)
                     results = process_pdf_streamlit(
                         pdf_path=temp_file_path,
-                        method=method,
+                        method=method,  # 保持原样，process_pdf_streamlit内部会处理
                         flavor=flavor,
                         params=params,
                         param_config=sidebar_config.get('param_config')
@@ -321,18 +329,26 @@ def main():
         
         with col2:
             st.markdown("""
-            ## ⚠️ Test Version Limitations
+            ## ⚠️ Version Information
             
             ### File Size Limit
             
-            - Current version only supports test files
+            - Current version supports test files
             - **Maximum file size**: 10 MB
-            - Recommend using small PDF files for testing
+            - Recommend using small PDF/image files for testing
             
-            ### Feature Limitations
+            ### Available Features
             
-            - Transformer models are not available (large model files). Download the repository and model files to local PC could test the Transformer Feature.
-            - Recommend using PDFPlumber method first
+            - ✅ **PDFPlumber**: PDF table extraction (available)
+            - ✅ **Camelot**: PDF table extraction (available)
+            - ✅ **PaddleOCR**: Image table detection (available)
+            - ⚠️ **Transformer**: Only available in local deployment
+            
+            ### Deployment Options
+            
+            - **Streamlit Cloud**: Quick trial with PDFPlumber, Camelot, and PaddleOCR
+            - **Local Deployment**: Full features including Transformer
+            - See [Deployment Guide](https://github.com/livezingy/PDFDataExtractor/blob/main/docs/deployment_guide.md) for details
             
             ### Usage Recommendations
             
