@@ -17,7 +17,7 @@
 
 **无需安装，直接在浏览器中使用**
 
-1. 访问 [Streamlit Cloud部署](https://share.streamlit.io/) 或查看 [部署指南](docs/streamlit_cloud_deployment.md)
+1. 访问 [Streamlit Cloud部署](https://share.streamlit.io/) 或查看 [部署指南](docs/deployment_guide.md)
 2. 支持功能：
    - ✅ PDFPlumber（PDF表格提取）
    - ✅ Camelot（PDF表格提取）
@@ -99,14 +99,13 @@ streamlit run streamlit_app/streamlit_app.py
 ### 🎯 快速开始
 
 - [快速开始指南](docs/quick_start.md) - 5分钟快速上手
-- [Streamlit Cloud部署指南](docs/streamlit_cloud_deployment.md) - 一键试用部署 ⭐（推荐）
+- [部署指南](docs/deployment_guide.md) - 部署和配置说明 ⭐（推荐）
 - [Streamlit用户使用指南](docs/streamlit_user_guide.md) - 完整使用说明
 
 ### 👥 用户指南
 
 - [常见问题FAQ](docs/FAQ.md) - 常见问题解答
 - [部署指南](docs/deployment_guide.md) - 部署和配置说明
-- [性能优化指南](docs/performance_optimization.md) - 性能优化建议
 
 ### 🔧 模块使用文档
 
@@ -120,10 +119,8 @@ streamlit run streamlit_app/streamlit_app.py
 - [参数计算公式](docs/parameter_calculation_formulas.md) - 参数计算原理
 - [参数范围说明](docs/parameter_range_documentation.md) - 参数范围设定
 - [表格类型分类原理](docs/table_type_classification_principle.md) - 表格类型判断算法
-- [表格类型判断指南](docs/table_type_judgment_guide.md) - 实用判断指南
 - [Camelot参数计算](docs/camelot_parameter_calculation.md) - Camelot参数详解
 - [PDFPlumber参数计算](docs/pdfplumber_parameter_calculation.md) - PDFPlumber参数详解
-- [结构识别分析](docs/recognize_structure_analysis.md) - 表格结构识别原理
 - [Transformer处理说明](docs/transformer_table_processing.md) - Transformer模型使用
 
 ### 📖 提取器指南
@@ -135,9 +132,6 @@ streamlit run streamlit_app/streamlit_app.py
 ### 🛠️ 开发文档
 
 - [测试指南](docs/testing_guide.md) - 测试方法和示例
-- [模块化重构总结](docs/modularization_summary.md) - 架构重构说明
-- [PaddleOCR集成总结](docs/paddleocr_integration_summary.md) - PaddleOCR集成说明
-- [Streamlit引擎选择实现](docs/streamlit_engine_selection_implementation.md) - 引擎选择功能说明
 
 
 ## 🏗️ 项目结构
