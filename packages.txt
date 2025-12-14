@@ -1,12 +1,1 @@
-# Streamlit Cloud系统依赖
-# 用于安装系统级包（通过apt-get）
-
-# Ghostscript (Camelot依赖)
 ghostscript
-
-# Tesseract OCR (可选，如果使用pytesseract)
-# tesseract-ocr
-
-# 其他系统依赖
-# libgl1-mesa-glx (OpenCV依赖，通常已包含)
-# libglib2.0-0 (通常已包含)
