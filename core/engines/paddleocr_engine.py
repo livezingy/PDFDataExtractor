@@ -114,33 +114,73 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
         if self._structure_initialized and self._structure_engine is not None:
             return True
         
-        # 首先尝试导入 PPStructureV3 (PaddleOCR 3.x)
+        # 首先检查是否可以使用 PPStructureV3 (PaddleOCR 3.x)
+        ppstructure_v3_available = False
         try:
             from paddleocr import PPStructureV3
-            
-            table_model_dir = kwargs.get('table_model_dir', self.table_model_dir)
-            
-            # PPStructureV3 的参数可能不同，需要适配
-            init_params = {
-                'show_log': False,
-                'image_orientation': True
-            }
-            
-            # 如果提供了 table_model_dir，尝试使用
-            if table_model_dir:
-                init_params['table_model_dir'] = table_model_dir
-            
-            # use_gpu 参数在 PPStructureV3 中可能不存在或名称不同
-            # 先尝试基本初始化
-            self._structure_engine = PPStructureV3(**init_params)
-            self._is_ppstructure_v3 = True
-            
-            self._structure_initialized = True
-            self.logger.info("PaddleOCR PP-StructureV3 engine initialized")
-            return True
-            
+            ppstructure_v3_available = True
         except ImportError:
-            # 如果 PPStructureV3 不存在，尝试旧版本的 PPStructure
+            pass
+        
+        if ppstructure_v3_available:
+            # 使用 PPStructureV3 (PaddleOCR 3.x)
+            try:
+                from paddleocr import PPStructureV3
+                
+                # PPStructureV3 的参数可能因版本而异，尝试最简化的初始化
+                # 先尝试无参数初始化
+                try:
+                    self._structure_engine = PPStructureV3()
+                    self.logger.info("PaddleOCR PP-StructureV3 engine initialized (no parameters)")
+                except TypeError:
+                    # 如果无参数失败，尝试常见的参数组合
+                    # PPStructureV3 可能支持 use_doc_orientation_classify 和 use_doc_unwarping
+                    try:
+                        self._structure_engine = PPStructureV3(
+                            use_doc_orientation_classify=False,
+                            use_doc_unwarping=False
+                        )
+                        self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with orientation/unwarping params)")
+                    except TypeError:
+                        # 尝试单个参数
+                        try:
+                            self._structure_engine = PPStructureV3(use_doc_orientation_classify=False)
+                            self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with orientation param)")
+                        except TypeError:
+                            # 如果还是失败，尝试其他可能的参数
+                            table_model_dir = kwargs.get('table_model_dir', self.table_model_dir)
+                            if table_model_dir:
+                                try:
+                                    self._structure_engine = PPStructureV3(table_model_dir=table_model_dir)
+                                    self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with table_model_dir)")
+                                except TypeError as e:
+                                    # 如果所有参数组合都失败，记录错误并尝试查看可用参数
+                                    self.logger.error(f"Failed to initialize PPStructureV3 with any parameter combination: {e}")
+                                    self.logger.error("Attempting to inspect PPStructureV3 signature...")
+                                    try:
+                                        import inspect
+                                        sig = inspect.signature(PPStructureV3.__init__)
+                                        self.logger.info(f"PPStructureV3.__init__ signature: {sig}")
+                                    except:
+                                        pass
+                                    return False
+                            else:
+                                self.logger.error("Failed to initialize PPStructureV3: No valid parameter combination found")
+                                return False
+                
+                self._is_ppstructure_v3 = True
+                self._structure_initialized = True
+                self.logger.info("PaddleOCR PP-StructureV3 engine initialized successfully")
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"Failed to load PP-StructureV3 models: {e}")
+                import traceback
+                self.logger.debug(traceback.format_exc())
+                # 在 3.x 版本中，PPStructure 不存在，所以不需要回退
+                return False
+        else:
+            # 尝试旧版本的 PPStructure
             try:
                 from paddleocr import PPStructure
                 
@@ -165,31 +205,8 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                 return False
             except Exception as e:
                 self.logger.error(f"Failed to load PP-Structure models (legacy): {e}")
-                return False
-                
-        except Exception as e:
-            self.logger.error(f"Failed to load PP-StructureV3 models: {e}")
-            # 如果 PPStructureV3 初始化失败，尝试回退到旧版本
-            try:
-                from paddleocr import PPStructure
-                
-                table_model_dir = kwargs.get('table_model_dir', self.table_model_dir)
-                
-                init_params = {}
-                if self.use_gpu:
-                    init_params['use_gpu'] = self.use_gpu
-                if table_model_dir:
-                    init_params['table_model_dir'] = table_model_dir
-                
-                self._structure_engine = PPStructure(**init_params)
-                self._is_ppstructure_v3 = False
-                
-                self._structure_initialized = True
-                self.logger.info("PaddleOCR PP-Structure engine initialized (fallback to legacy)")
-                return True
-                
-            except Exception as fallback_error:
-                self.logger.error(f"Failed to fallback to PPStructure: {fallback_error}")
+                import traceback
+                self.logger.debug(traceback.format_exc())
                 return False
     
     def recognize_text(self, image: Image.Image, **kwargs) -> List[Dict]:
@@ -287,49 +304,62 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
             
             # 根据版本使用不同的API
             if self._is_ppstructure_v3:
-                # PPStructureV3 使用 predict() 方法
-                # 需要保存图像到临时文件或使用其他方式
-                import tempfile
-                import os
-                from PIL import Image as PILImage
-                
-                # 创建临时文件
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                    image.save(tmp_file.name)
-                    tmp_path = tmp_file.name
-                
+                # PPStructureV3 使用 predict() 方法，可以直接接受 PIL Image 或 numpy array
+                # 优先使用 PIL Image，如果失败则尝试 numpy array
                 try:
-                    # PPStructureV3 使用 predict() 方法，接受文件路径
-                    results = self._structure_engine.predict(tmp_path)
+                    # 直接使用 PIL Image
+                    results = self._structure_engine.predict(image)
+                except (TypeError, AttributeError):
+                    # 如果 PIL Image 不支持，转换为 numpy array
+                    # PPStructureV3 期望 BGR 格式的 numpy array
+                    import cv2
+                    img_array = np.array(image)
+                    # PIL Image 是 RGB，需要转换为 BGR
+                    if len(img_array.shape) == 3 and img_array.shape[2] == 3:
+                        img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                    results = self._structure_engine.predict(img_array)
+                
+                # 转换 PPStructureV3 结果格式
+                detection_results = []
+                for result in results:
+                    # PPStructureV3 返回的结果对象，需要提取表格信息
+                    # 结果可能包含多个元素，需要查找表格类型
+                    result_type = None
+                    if hasattr(result, 'type'):
+                        result_type = result.type
+                    elif hasattr(result, 'get') and isinstance(result, dict):
+                        result_type = result.get('type')
                     
-                    # 转换 PPStructureV3 结果格式
-                    detection_results = []
-                    for result in results:
-                        # PPStructureV3 返回的结果对象，需要提取表格信息
-                        # 结果可能包含多个元素，需要查找表格类型
-                        if hasattr(result, 'type') and result.type == 'table':
-                            # 提取边界框（PPStructureV3 的格式可能不同）
-                            bbox = getattr(result, 'bbox', None)
-                            if bbox:
-                                if isinstance(bbox[0], (list, tuple)):
-                                    x_coords = [point[0] for point in bbox]
-                                    y_coords = [point[1] for point in bbox]
-                                    x1, y1 = min(x_coords), min(y_coords)
-                                    x2, y2 = max(x_coords), max(y_coords)
-                                    bbox_rect = [x1, y1, x2, y2]
-                                else:
-                                    bbox_rect = bbox[:4] if len(bbox) >= 4 else bbox
-                                
-                                detection_results.append({
-                                    'bbox': bbox_rect,
-                                    'confidence': getattr(result, 'score', 1.0),
-                                    'type': 'table',
-                                    'raw': result  # 保留原始结果对象
-                                })
-                finally:
-                    # 清理临时文件
-                    if os.path.exists(tmp_path):
-                        os.unlink(tmp_path)
+                    if result_type == 'table':
+                        # 提取边界框（PPStructureV3 的格式可能不同）
+                        bbox = None
+                        if hasattr(result, 'bbox'):
+                            bbox = result.bbox
+                        elif hasattr(result, 'get') and isinstance(result, dict):
+                            bbox = result.get('bbox')
+                        
+                        if bbox:
+                            if isinstance(bbox[0], (list, tuple)):
+                                x_coords = [point[0] for point in bbox]
+                                y_coords = [point[1] for point in bbox]
+                                x1, y1 = min(x_coords), min(y_coords)
+                                x2, y2 = max(x_coords), max(y_coords)
+                                bbox_rect = [x1, y1, x2, y2]
+                            else:
+                                bbox_rect = bbox[:4] if len(bbox) >= 4 else bbox
+                            
+                            score = 1.0
+                            if hasattr(result, 'score'):
+                                score = result.score
+                            elif hasattr(result, 'get') and isinstance(result, dict):
+                                score = result.get('score', 1.0)
+                            
+                            detection_results.append({
+                                'bbox': bbox_rect,
+                                'confidence': float(score),
+                                'type': 'table',
+                                'raw': result  # 保留原始结果对象
+                            })
                 
                 return detection_results
             else:
@@ -404,53 +434,78 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
             
             # 根据版本使用不同的API
             if self._is_ppstructure_v3:
-                # PPStructureV3 使用 predict() 方法
-                import tempfile
-                import os
-                
-                # 创建临时文件
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-                    image.save(tmp_file.name)
-                    tmp_path = tmp_file.name
-                
+                # PPStructureV3 使用 predict() 方法，可以直接接受 PIL Image 或 numpy array
                 try:
-                    # PPStructureV3 使用 predict() 方法
-                    results = self._structure_engine.predict(tmp_path)
+                    # 直接使用 PIL Image
+                    results = self._structure_engine.predict(image)
+                except (TypeError, AttributeError):
+                    # 如果 PIL Image 不支持，转换为 numpy array
+                    # PPStructureV3 期望 BGR 格式的 numpy array
+                    import cv2
+                    img_array = np.array(image)
+                    # PIL Image 是 RGB，需要转换为 BGR
+                    if len(img_array.shape) == 3 and img_array.shape[2] == 3:
+                        img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                    results = self._structure_engine.predict(img_array)
+                
+                # 查找表格结果
+                table_result = None
+                for result in results:
+                    result_type = None
+                    if hasattr(result, 'type'):
+                        result_type = result.type
+                    elif hasattr(result, 'get') and isinstance(result, dict):
+                        result_type = result.get('type')
                     
-                    # 查找表格结果
-                    table_result = None
-                    for result in results:
-                        if hasattr(result, 'type') and result.type == 'table':
-                            table_result = result
-                            break
-                    
-                    if not table_result:
-                        self.logger.warning("No table structure found in image")
-                        return {}
-                    
-                    # 转换 PPStructureV3 结果格式
-                    # PPStructureV3 的结果对象可能有不同的属性
-                    result = {
-                        'html': getattr(table_result, 'html', '') or getattr(table_result, 'markdown', ''),
-                        'cells': getattr(table_result, 'cells', []),
-                        'raw': table_result if kwargs.get('return_raw', False) else None
-                    }
-                    
-                    # 尝试从 markdown 或 HTML 中提取信息
-                    if hasattr(table_result, 'save_to_markdown'):
-                        # 可以尝试获取 markdown 内容
-                        import io
-                        md_buffer = io.StringIO()
-                        try:
-                            table_result.save_to_markdown(save_path=None)  # 可能需要调整
-                            result['markdown'] = md_buffer.getvalue()
-                        except:
-                            pass
-                    
-                finally:
-                    # 清理临时文件
-                    if os.path.exists(tmp_path):
+                    if result_type == 'table':
+                        table_result = result
+                        break
+                
+                if not table_result:
+                    self.logger.warning("No table structure found in image")
+                    return {}
+                
+                # 转换 PPStructureV3 结果格式
+                # PPStructureV3 的结果对象可能有不同的属性
+                html_content = ''
+                if hasattr(table_result, 'html'):
+                    html_content = table_result.html
+                elif hasattr(table_result, 'get') and isinstance(table_result, dict):
+                    html_content = table_result.get('html', '')
+                
+                # 尝试获取 markdown 内容
+                markdown_content = ''
+                if hasattr(table_result, 'markdown'):
+                    markdown_content = table_result.markdown
+                elif hasattr(table_result, 'save_to_markdown'):
+                    # 如果支持 save_to_markdown，尝试获取内容
+                    import io
+                    import tempfile
+                    import os
+                    try:
+                        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as tmp_file:
+                            tmp_path = tmp_file.name
+                        table_result.save_to_markdown(save_path=tmp_path)
+                        with open(tmp_path, 'r', encoding='utf-8') as f:
+                            markdown_content = f.read()
                         os.unlink(tmp_path)
+                    except Exception as e:
+                        self.logger.debug(f"Failed to extract markdown from PPStructureV3 result: {e}")
+                
+                cells = []
+                if hasattr(table_result, 'cells'):
+                    cells = table_result.cells
+                elif hasattr(table_result, 'get') and isinstance(table_result, dict):
+                    cells = table_result.get('cells', [])
+                
+                result = {
+                    'html': html_content or markdown_content,  # 使用 HTML 或 markdown
+                    'cells': cells,
+                    'raw': table_result if kwargs.get('return_raw', False) else None
+                }
+                
+                if markdown_content:
+                    result['markdown'] = markdown_content
             else:
                 # 旧版本 PPStructure 使用 __call__ 方法
                 # 转换PIL Image为numpy array
