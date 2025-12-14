@@ -6,12 +6,7 @@ import os
 import sys
 import traceback
 from typing import Optional, Dict, Any
-from PySide6.QtCore import QObject, Signal
 from core.utils.path_utils import get_output_paths
-
-class LogSignals(QObject):
-    """Signals for log messages"""
-    log_message = Signal(str)  # Signal for log messages
 
 class AppLogger:
     """Application log manager
@@ -22,7 +17,6 @@ class AppLogger:
     
     _instance = None
     _logger = None
-    _signals = LogSignals()
     
     @classmethod
     def get_logger(cls, config: Dict = None) -> 'AppLogger':
@@ -127,7 +121,6 @@ class AppLogger:
         if data:
             message = f"{message} - {data}"
         self._logger.info(message)
-        self._signals.log_message.emit(f"INFO: {message}")
         
     def warning(self, message: str, data: Optional[Dict] = None):
         """Log warning message
@@ -139,7 +132,6 @@ class AppLogger:
         if data:
             message = f"{message} - {data}"
         self._logger.warning(message)
-        self._signals.log_message.emit(f"WARNING: {message}")
         
     def error(self, message: str, exc_info: bool = False):
         """Log error message
@@ -150,10 +142,8 @@ class AppLogger:
         """
         if exc_info:
             self._logger.error(message, exc_info=True)
-            self._signals.log_message.emit(f"ERROR: {message}")
         else:
             self._logger.error(message)
-            self._signals.log_message.emit(f"ERROR: {message}")
         
     def critical(self, message: str, data: Optional[Dict] = None):
         """Log critical message
@@ -165,7 +155,6 @@ class AppLogger:
         if data:
             message = f"{message} - {data}"
         self._logger.critical(message)
-        self._signals.log_message.emit(f"CRITICAL: {message}")
         
     def log_exception(self, exception: Exception, data: Optional[Dict] = None):
         """Log exception
@@ -178,7 +167,6 @@ class AppLogger:
         if data:
             message = f"{message} - {data}"
         self._logger.exception(message)
-        self._signals.log_message.emit(f"ERROR: {message}")
         
     def log_operation(self, operation: str, data: Optional[Dict] = None):
         """Log operation
@@ -191,7 +179,6 @@ class AppLogger:
         if data:
             message = f"{message} - {data}"
         self._logger.info(message)
-        self._signals.log_message.emit(f"INFO: {message}")
         
     def log_performance(self, operation: str, duration: float, data: Optional[Dict] = None):
         """Log performance
@@ -205,16 +192,6 @@ class AppLogger:
         if data:
             message = f"{message} - {data}"
         self._logger.info(message)
-        self._signals.log_message.emit(f"INFO: {message}")
-        
-    @classmethod
-    def get_signals(cls) -> LogSignals:
-        """Get log signals
-        
-        Returns:
-            LogSignals instance
-        """
-        return cls._signals
         
     def set_output_path(self, output_path: str):
         """Set output path and reinitialize logger
