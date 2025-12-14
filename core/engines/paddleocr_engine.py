@@ -126,47 +126,95 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
             # 使用 PPStructureV3 (PaddleOCR 3.x)
             try:
                 from paddleocr import PPStructureV3
+                import paddleocr
+                
+                # 记录 PaddleOCR 版本信息
+                try:
+                    paddleocr_version = getattr(paddleocr, '__version__', 'unknown')
+                    self.logger.info(f"PaddleOCR version: {paddleocr_version}")
+                except:
+                    pass
+                
+                # 首先检查 PPStructureV3 的可用参数
+                import inspect
+                try:
+                    sig = inspect.signature(PPStructureV3.__init__)
+                    self.logger.info(f"PPStructureV3.__init__ signature: {sig}")
+                    # 获取所有参数名
+                    param_names = list(sig.parameters.keys())
+                    self.logger.info(f"PPStructureV3 available parameters: {param_names}")
+                    
+                    # 明确检查是否包含 show_log（不应该有）
+                    if 'show_log' in param_names:
+                        self.logger.warning("PPStructureV3.__init__ contains 'show_log' parameter - this should not be used")
+                except Exception as sig_error:
+                    self.logger.debug(f"Could not inspect PPStructureV3 signature: {sig_error}")
                 
                 # PPStructureV3 的参数可能因版本而异，尝试最简化的初始化
                 # 先尝试无参数初始化
+                init_success = False
+                last_error = None
+                
+                # 尝试1: 无参数
                 try:
                     self._structure_engine = PPStructureV3()
                     self.logger.info("PaddleOCR PP-StructureV3 engine initialized (no parameters)")
-                except TypeError:
-                    # 如果无参数失败，尝试常见的参数组合
-                    # PPStructureV3 可能支持 use_doc_orientation_classify 和 use_doc_unwarping
+                    init_success = True
+                except (TypeError, ValueError) as e:
+                    last_error = e
+                    self.logger.debug(f"PPStructureV3() failed: {e}")
+                
+                # 尝试2: 使用 use_doc_orientation_classify 和 use_doc_unwarping
+                if not init_success:
                     try:
                         self._structure_engine = PPStructureV3(
                             use_doc_orientation_classify=False,
                             use_doc_unwarping=False
                         )
                         self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with orientation/unwarping params)")
-                    except TypeError:
-                        # 尝试单个参数
+                        init_success = True
+                    except (TypeError, ValueError) as e:
+                        last_error = e
+                        self.logger.debug(f"PPStructureV3(use_doc_orientation_classify=False, use_doc_unwarping=False) failed: {e}")
+                
+                # 尝试3: 只使用 use_doc_orientation_classify
+                if not init_success:
+                    try:
+                        self._structure_engine = PPStructureV3(use_doc_orientation_classify=False)
+                        self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with orientation param)")
+                        init_success = True
+                    except (TypeError, ValueError) as e:
+                        last_error = e
+                        self.logger.debug(f"PPStructureV3(use_doc_orientation_classify=False) failed: {e}")
+                
+                # 尝试4: 只使用 use_doc_unwarping
+                if not init_success:
+                    try:
+                        self._structure_engine = PPStructureV3(use_doc_unwarping=False)
+                        self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with unwarping param)")
+                        init_success = True
+                    except (TypeError, ValueError) as e:
+                        last_error = e
+                        self.logger.debug(f"PPStructureV3(use_doc_unwarping=False) failed: {e}")
+                
+                # 尝试5: 使用 table_model_dir（如果提供）
+                if not init_success:
+                    table_model_dir = kwargs.get('table_model_dir', self.table_model_dir)
+                    if table_model_dir:
                         try:
-                            self._structure_engine = PPStructureV3(use_doc_orientation_classify=False)
-                            self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with orientation param)")
-                        except TypeError:
-                            # 如果还是失败，尝试其他可能的参数
-                            table_model_dir = kwargs.get('table_model_dir', self.table_model_dir)
-                            if table_model_dir:
-                                try:
-                                    self._structure_engine = PPStructureV3(table_model_dir=table_model_dir)
-                                    self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with table_model_dir)")
-                                except TypeError as e:
-                                    # 如果所有参数组合都失败，记录错误并尝试查看可用参数
-                                    self.logger.error(f"Failed to initialize PPStructureV3 with any parameter combination: {e}")
-                                    self.logger.error("Attempting to inspect PPStructureV3 signature...")
-                                    try:
-                                        import inspect
-                                        sig = inspect.signature(PPStructureV3.__init__)
-                                        self.logger.info(f"PPStructureV3.__init__ signature: {sig}")
-                                    except:
-                                        pass
-                                    return False
-                            else:
-                                self.logger.error("Failed to initialize PPStructureV3: No valid parameter combination found")
-                                return False
+                            self._structure_engine = PPStructureV3(table_model_dir=table_model_dir)
+                            self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with table_model_dir)")
+                            init_success = True
+                        except (TypeError, ValueError) as e:
+                            last_error = e
+                            self.logger.debug(f"PPStructureV3(table_model_dir=...) failed: {e}")
+                
+                if not init_success:
+                    error_msg = f"Failed to initialize PPStructureV3 with any parameter combination. Last error: {last_error}"
+                    self.logger.error(error_msg)
+                    if last_error:
+                        self.logger.error(f"Error type: {type(last_error).__name__}, Error message: {str(last_error)}")
+                    return False
                 
                 self._is_ppstructure_v3 = True
                 self._structure_initialized = True
@@ -174,9 +222,10 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                 return True
                 
             except Exception as e:
-                self.logger.error(f"Failed to load PP-StructureV3 models: {e}")
+                error_msg = f"Failed to load PP-StructureV3 models: {e}"
+                self.logger.error(error_msg)
                 import traceback
-                self.logger.debug(traceback.format_exc())
+                self.logger.error(f"Full traceback:\n{traceback.format_exc()}")
                 # 在 3.x 版本中，PPStructure 不存在，所以不需要回退
                 return False
         else:
@@ -479,18 +528,24 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                     markdown_content = table_result.markdown
                 elif hasattr(table_result, 'save_to_markdown'):
                     # 如果支持 save_to_markdown，尝试获取内容
-                    import io
                     import tempfile
                     import os
+                    tmp_path = None
                     try:
                         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as tmp_file:
                             tmp_path = tmp_file.name
                         table_result.save_to_markdown(save_path=tmp_path)
                         with open(tmp_path, 'r', encoding='utf-8') as f:
                             markdown_content = f.read()
-                        os.unlink(tmp_path)
                     except Exception as e:
                         self.logger.debug(f"Failed to extract markdown from PPStructureV3 result: {e}")
+                    finally:
+                        # 确保临时文件总是被清理
+                        if tmp_path and os.path.exists(tmp_path):
+                            try:
+                                os.unlink(tmp_path)
+                            except Exception as cleanup_error:
+                                self.logger.warning(f"Failed to cleanup temporary file {tmp_path}: {cleanup_error}")
                 
                 cells = []
                 if hasattr(table_result, 'cells'):
