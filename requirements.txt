@@ -17,8 +17,13 @@ numpy>=1.23.0
 # OCR and Text Processing
 pytesseract>=0.3.10
 easyocr>=1.7.0
-paddleocr==2.7.0
-paddlepaddle==2.5.2
+# PaddleOCR 3.x for Python 3.13 compatibility
+# Note: PaddleOCR 2.x requires PaddlePaddle 2.x which doesn't support Python 3.13
+# Streamlit Cloud uses Python 3.13, so we must use PaddleOCR 3.x + PaddlePaddle 3.x
+paddleocr[all]>=3.0.0
+paddlepaddle>=3.0.0
+# PP-StructureV3 requires paddlex[ocr] extra dependencies
+paddlex[ocr]>=3.3.0
 scikit-learn>=1.3.0
 
 # Data Processing
