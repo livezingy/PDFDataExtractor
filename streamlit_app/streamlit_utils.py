@@ -609,15 +609,51 @@ def _process_image_with_paddleocr(image, params: Dict[str, Any], results: Dict[s
             'step': 3,
             'name': 'PaddleOCR Initialization',
             'status': 'info',
-            'message': 'Initializing PaddleOCR engine...'
+            'message': 'Initializing PaddleOCR engine... This may take 2-5 minutes on first use as models are being downloaded. Please be patient.'
         })
         
         # 创建PaddleOCR检测引擎
         detection_engine = EngineFactory.create_detection('paddleocr', use_gpu=False)
         
         # 加载模型
-        if not detection_engine.load_models():
-            raise RuntimeError("Failed to load PaddleOCR models")
+        # 注意：首次使用时，PPStructureV3 会下载多个模型文件（约200-500MB），
+        # 这可能需要2-5分钟，特别是在Streamlit Cloud环境中。
+        # 如果下载过程中出现超时，请稍后重试或使用其他提取方法（如PDFPlumber或Camelot）
+        try:
+            if not detection_engine.load_models():
+                results['detection_steps'].append({
+                    'step': 3,
+                    'name': 'PaddleOCR Initialization',
+                    'status': 'error',
+                    'message': 'Model loading failed. Please try again or use a different extraction method (PDFPlumber or Camelot).'
+                })
+                raise RuntimeError("Failed to load PaddleOCR models")
+        except RuntimeError as e:
+            # 检查是否是依赖错误
+            error_msg = str(e)
+            if "dependency" in error_msg.lower() or "paddlex" in error_msg.lower():
+                results['detection_steps'].append({
+                    'step': 3,
+                    'name': 'PaddleOCR Initialization',
+                    'status': 'error',
+                    'message': 'PaddleOCR dependency error. The system is trying to fall back to legacy version...'
+                })
+                # 错误已经在引擎内部处理，这里只是记录
+                raise
+            elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+                results['detection_steps'].append({
+                    'step': 3,
+                    'name': 'PaddleOCR Initialization',
+                    'status': 'error',
+                    'message': 'Model loading timeout. This usually happens on first use when downloading models. Please wait a few minutes and try again, or use PDFPlumber/Camelot instead.'
+                })
+                raise RuntimeError(
+                    "PaddleOCR model loading timeout. "
+                    "This usually happens on first use when models are being downloaded (may take 2-5 minutes). "
+                    "Please wait a few minutes and try again, or use a different extraction method (PDFPlumber or Camelot)."
+                ) from e
+            else:
+                raise
         
         results['detection_steps'].append({
             'step': 4,

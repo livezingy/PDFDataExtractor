@@ -6,11 +6,17 @@ PaddleOCR引擎
 支持文本识别、表格检测和结构识别
 """
 
+import os
 import numpy as np
 from typing import Dict, List, Optional, Any, Tuple
 from PIL import Image
 from core.engines.base import BaseOCREngine, BaseDetectionEngine
 from core.utils.logger import AppLogger
+
+# 设置环境变量以跳过模型源检查，加快初始化速度（特别是Streamlit Cloud环境）
+# 这可以避免在初始化时检查模型托管服务器的连接性
+if 'DISABLE_MODEL_SOURCE_CHECK' not in os.environ:
+    os.environ['DISABLE_MODEL_SOURCE_CHECK'] = 'True'
 
 
 class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
@@ -150,19 +156,29 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                 except Exception as sig_error:
                     self.logger.debug(f"Could not inspect PPStructureV3 signature: {sig_error}")
                 
-                # PPStructureV3 的参数可能因版本而异，尝试最简化的初始化
-                # 先尝试无参数初始化
+                # PPStructureV3 的参数可能因版本而异，优先使用最小化配置以减少模型下载
+                # 禁用不必要的功能以加快初始化速度并减少内存占用（特别是Streamlit Cloud环境）
                 init_success = False
                 last_error = None
                 
-                # 尝试1: 无参数
+                # 尝试1: 最小化配置 - 只启用表格检测和识别，禁用所有其他功能
+                # 这样可以避免下载不必要的模型（文档方向、文档矫正、公式识别、图表识别等）
                 try:
-                    self._structure_engine = PPStructureV3()
-                    self.logger.info("PaddleOCR PP-StructureV3 engine initialized (no parameters)")
+                    self._structure_engine = PPStructureV3(
+                        use_doc_orientation_classify=False,  # 禁用文档方向分类
+                        use_doc_unwarping=False,  # 禁用文档矫正
+                        use_textline_orientation=False,  # 禁用文本行方向
+                        use_seal_recognition=False,  # 禁用印章识别
+                        use_formula_recognition=False,  # 禁用公式识别（减少模型下载）
+                        use_chart_recognition=False,  # 禁用图表识别
+                        use_region_detection=False,  # 禁用区域检测
+                        use_table_recognition=True  # 只启用表格识别（这是我们需要的主要功能）
+                    )
+                    self.logger.info("PaddleOCR PP-StructureV3 engine initialized (minimal config - table recognition only)")
                     init_success = True
                 except (TypeError, ValueError) as e:
                     last_error = e
-                    self.logger.debug(f"PPStructureV3() failed: {e}")
+                    self.logger.debug(f"PPStructureV3(minimal config) failed: {e}")
                 except Exception as e:
                     # Handle dependency errors specifically for Streamlit Cloud environment
                     if "DependencyError" in str(type(e)) or "paddlex" in str(e).lower():
@@ -171,16 +187,16 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                         # Try legacy PPStructure as fallback
                         return self._load_legacy_ppstructure(kwargs)
                     last_error = e
-                    self.logger.debug(f"PPStructureV3() failed with dependency error: {e}")
+                    self.logger.debug(f"PPStructureV3(minimal config) failed with dependency error: {e}")
                 
-                # 尝试2: 使用 use_doc_orientation_classify 和 use_doc_unwarping
+                # 尝试2: 简化配置 - 只禁用文档方向和矫正
                 if not init_success:
                     try:
                         self._structure_engine = PPStructureV3(
                             use_doc_orientation_classify=False,
                             use_doc_unwarping=False
                         )
-                        self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with orientation/unwarping params)")
+                        self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with orientation/unwarping disabled)")
                         init_success = True
                     except (TypeError, ValueError) as e:
                         last_error = e
@@ -195,15 +211,15 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                         last_error = e
                         self.logger.debug(f"PPStructureV3(use_doc_orientation_classify=False, use_doc_unwarping=False) failed with dependency error: {e}")
                 
-                # 尝试3: 只使用 use_doc_orientation_classify
+                # 尝试3: 无参数（默认配置，会下载所有模型）
                 if not init_success:
                     try:
-                        self._structure_engine = PPStructureV3(use_doc_orientation_classify=False)
-                        self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with orientation param)")
+                        self._structure_engine = PPStructureV3()
+                        self.logger.info("PaddleOCR PP-StructureV3 engine initialized (default config - all features enabled)")
                         init_success = True
                     except (TypeError, ValueError) as e:
                         last_error = e
-                        self.logger.debug(f"PPStructureV3(use_doc_orientation_classify=False) failed: {e}")
+                        self.logger.debug(f"PPStructureV3() failed: {e}")
                     except Exception as e:
                         # Handle dependency errors specifically for Streamlit Cloud environment
                         if "DependencyError" in str(type(e)) or "paddlex" in str(e).lower():
@@ -212,34 +228,21 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                             # Try legacy PPStructure as fallback
                             return self._load_legacy_ppstructure(kwargs)
                         last_error = e
-                        self.logger.debug(f"PPStructureV3(use_doc_orientation_classify=False) failed with dependency error: {e}")
+                        self.logger.debug(f"PPStructureV3() failed with dependency error: {e}")
                 
-                # 尝试4: 只使用 use_doc_unwarping
-                if not init_success:
-                    try:
-                        self._structure_engine = PPStructureV3(use_doc_unwarping=False)
-                        self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with unwarping param)")
-                        init_success = True
-                    except (TypeError, ValueError) as e:
-                        last_error = e
-                        self.logger.debug(f"PPStructureV3(use_doc_unwarping=False) failed: {e}")
-                    except Exception as e:
-                        # Handle dependency errors specifically for Streamlit Cloud environment
-                        if "DependencyError" in str(type(e)) or "paddlex" in str(e).lower():
-                            self.logger.error(f"PPStructureV3 dependency error: {e}")
-                            self.logger.error("Falling back to legacy PPStructure...")
-                            # Try legacy PPStructure as fallback
-                            return self._load_legacy_ppstructure(kwargs)
-                        last_error = e
-                        self.logger.debug(f"PPStructureV3(use_doc_unwarping=False) failed with dependency error: {e}")
-                
-                # 尝试5: 使用 table_model_dir（如果提供）
+                # 尝试4: 使用 table_model_dir（如果提供）
                 if not init_success:
                     table_model_dir = kwargs.get('table_model_dir', self.table_model_dir)
                     if table_model_dir:
                         try:
-                            self._structure_engine = PPStructureV3(table_model_dir=table_model_dir)
-                            self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with table_model_dir)")
+                            self._structure_engine = PPStructureV3(
+                                table_model_dir=table_model_dir,
+                                use_doc_orientation_classify=False,
+                                use_doc_unwarping=False,
+                                use_formula_recognition=False,
+                                use_chart_recognition=False
+                            )
+                            self.logger.info("PaddleOCR PP-StructureV3 engine initialized (with table_model_dir and minimal features)")
                             init_success = True
                         except (TypeError, ValueError) as e:
                             last_error = e

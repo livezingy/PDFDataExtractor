@@ -61,6 +61,14 @@ def render_sidebar() -> dict:
                 # Streamlit Cloud环境：仅提供PaddleOCR
                 method = "PaddleOCR"
                 st.info("🌐 **Streamlit Cloud**: PaddleOCR is available for online use. Transformer is only available in local deployment.")
+                st.warning("""
+                ⚠️ **First-time Use Notice**: 
+                
+                On first use, PaddleOCR will download model files (200-500MB), which may take **2-5 minutes**. 
+                Please be patient and do not close the page. 
+                
+                If you encounter a timeout error, please wait a few minutes and try again.
+                """)
                 st.markdown("""
                 <div style='background-color: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
                     <strong>💡 Local Deployment:</strong> For Transformer support, please deploy locally. 
@@ -81,6 +89,14 @@ def render_sidebar() -> dict:
                 # 显示引擎说明
                 if method == "PaddleOCR":
                     st.info("💡 **PaddleOCR**: Best for Chinese documents, faster processing, supports HTML output")
+                    st.warning("""
+                    ⚠️ **First-time Use Notice**: 
+                    
+                    On first use, PaddleOCR will download model files (200-500MB), which may take **2-5 minutes**. 
+                    Please be patient and do not close the page. 
+                    
+                    If you encounter a timeout error, please wait a few minutes and try again, or use PDFPlumber/Camelot for PDF files instead.
+                    """)
                 else:
                     st.warning("⚠️ **Transformer**: Requires local deployment with sufficient resources. Not available in Streamlit Cloud.")
             
