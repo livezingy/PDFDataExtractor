@@ -17,9 +17,11 @@ camelot-py>=0.11.0
 # 版本要求：PaddleOCR 3.0+ 与 PaddlePaddle 3.0+ 必须匹配
 # PaddleOCR 3.3.2 需要 PaddleX 3.3.x 版本（3.3.0 <= version < 3.4.0）
 # 注意：paddlex[ocr] 会自动安装基础 paddlex 包及其 OCR 扩展依赖
-paddleocr[all]>=3.0.0
-paddlepaddle>=3.0.0
-paddlex[ocr]>=3.3.0
+# 为了兼容Streamlit Cloud环境，我们固定一个稳定版本组合
+paddleocr==2.7.0
+paddlepaddle==2.5.2
+# 注释掉paddlex依赖，因为Streamlit Cloud环境可能不支持
+# paddlex[ocr]>=3.3.0
 
 # 数据处理
 pandas>=2.0.0

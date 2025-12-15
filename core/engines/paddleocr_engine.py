@@ -163,6 +163,15 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                 except (TypeError, ValueError) as e:
                     last_error = e
                     self.logger.debug(f"PPStructureV3() failed: {e}")
+                except Exception as e:
+                    # Handle dependency errors specifically for Streamlit Cloud environment
+                    if "DependencyError" in str(type(e)) or "paddlex" in str(e).lower():
+                        self.logger.error(f"PPStructureV3 dependency error: {e}")
+                        self.logger.error("Falling back to legacy PPStructure...")
+                        # Try legacy PPStructure as fallback
+                        return self._load_legacy_ppstructure(kwargs)
+                    last_error = e
+                    self.logger.debug(f"PPStructureV3() failed with dependency error: {e}")
                 
                 # 尝试2: 使用 use_doc_orientation_classify 和 use_doc_unwarping
                 if not init_success:
@@ -176,6 +185,15 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                     except (TypeError, ValueError) as e:
                         last_error = e
                         self.logger.debug(f"PPStructureV3(use_doc_orientation_classify=False, use_doc_unwarping=False) failed: {e}")
+                    except Exception as e:
+                        # Handle dependency errors specifically for Streamlit Cloud environment
+                        if "DependencyError" in str(type(e)) or "paddlex" in str(e).lower():
+                            self.logger.error(f"PPStructureV3 dependency error: {e}")
+                            self.logger.error("Falling back to legacy PPStructure...")
+                            # Try legacy PPStructure as fallback
+                            return self._load_legacy_ppstructure(kwargs)
+                        last_error = e
+                        self.logger.debug(f"PPStructureV3(use_doc_orientation_classify=False, use_doc_unwarping=False) failed with dependency error: {e}")
                 
                 # 尝试3: 只使用 use_doc_orientation_classify
                 if not init_success:
@@ -186,6 +204,15 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                     except (TypeError, ValueError) as e:
                         last_error = e
                         self.logger.debug(f"PPStructureV3(use_doc_orientation_classify=False) failed: {e}")
+                    except Exception as e:
+                        # Handle dependency errors specifically for Streamlit Cloud environment
+                        if "DependencyError" in str(type(e)) or "paddlex" in str(e).lower():
+                            self.logger.error(f"PPStructureV3 dependency error: {e}")
+                            self.logger.error("Falling back to legacy PPStructure...")
+                            # Try legacy PPStructure as fallback
+                            return self._load_legacy_ppstructure(kwargs)
+                        last_error = e
+                        self.logger.debug(f"PPStructureV3(use_doc_orientation_classify=False) failed with dependency error: {e}")
                 
                 # 尝试4: 只使用 use_doc_unwarping
                 if not init_success:
@@ -196,6 +223,15 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                     except (TypeError, ValueError) as e:
                         last_error = e
                         self.logger.debug(f"PPStructureV3(use_doc_unwarping=False) failed: {e}")
+                    except Exception as e:
+                        # Handle dependency errors specifically for Streamlit Cloud environment
+                        if "DependencyError" in str(type(e)) or "paddlex" in str(e).lower():
+                            self.logger.error(f"PPStructureV3 dependency error: {e}")
+                            self.logger.error("Falling back to legacy PPStructure...")
+                            # Try legacy PPStructure as fallback
+                            return self._load_legacy_ppstructure(kwargs)
+                        last_error = e
+                        self.logger.debug(f"PPStructureV3(use_doc_unwarping=False) failed with dependency error: {e}")
                 
                 # 尝试5: 使用 table_model_dir（如果提供）
                 if not init_success:
@@ -208,6 +244,15 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                         except (TypeError, ValueError) as e:
                             last_error = e
                             self.logger.debug(f"PPStructureV3(table_model_dir=...) failed: {e}")
+                        except Exception as e:
+                            # Handle dependency errors specifically for Streamlit Cloud environment
+                            if "DependencyError" in str(type(e)) or "paddlex" in str(e).lower():
+                                self.logger.error(f"PPStructureV3 dependency error: {e}")
+                                self.logger.error("Falling back to legacy PPStructure...")
+                                # Try legacy PPStructure as fallback
+                                return self._load_legacy_ppstructure(kwargs)
+                            last_error = e
+                            self.logger.debug(f"PPStructureV3(table_model_dir=...) failed with dependency error: {e}")
                 
                 if not init_success:
                     error_msg = f"Failed to initialize PPStructureV3 with any parameter combination. Last error: {last_error}"
@@ -226,37 +271,53 @@ class PaddleOCREngine(BaseOCREngine, BaseDetectionEngine):
                 self.logger.error(error_msg)
                 import traceback
                 self.logger.error(f"Full traceback:\n{traceback.format_exc()}")
+                # Check if it's a dependency error and fall back to legacy version
+                if "DependencyError" in str(type(e)) or "paddlex" in str(e).lower():
+                    self.logger.error("Falling back to legacy PPStructure due to dependency issues...")
+                    return self._load_legacy_ppstructure(kwargs)
                 # 在 3.x 版本中，PPStructure 不存在，所以不需要回退
                 return False
         else:
             # 尝试旧版本的 PPStructure
-            try:
-                from paddleocr import PPStructure
+            return self._load_legacy_ppstructure(kwargs)
+    
+    def _load_legacy_ppstructure(self, kwargs: Dict) -> bool:
+        """
+        加载旧版本的PPStructure模型
+        
+        Args:
+            kwargs: 模型配置参数
                 
-                table_model_dir = kwargs.get('table_model_dir', self.table_model_dir)
-                
-                init_params = {}
-                if self.use_gpu:
-                    init_params['use_gpu'] = self.use_gpu
-                if table_model_dir:
-                    init_params['table_model_dir'] = table_model_dir
-                
-                self._structure_engine = PPStructure(**init_params)
-                self._is_ppstructure_v3 = False
-                
-                self._structure_initialized = True
-                self.logger.info("PaddleOCR PP-Structure engine initialized (legacy version)")
-                return True
-                
-            except ImportError as e:
-                self.logger.error(f"Failed to import PPStructure or PPStructureV3: {e}")
-                self.logger.error("Please ensure paddleocr is installed: pip install paddleocr")
-                return False
-            except Exception as e:
-                self.logger.error(f"Failed to load PP-Structure models (legacy): {e}")
-                import traceback
-                self.logger.debug(traceback.format_exc())
-                return False
+        Returns:
+            bool: 加载是否成功
+        """
+        try:
+            from paddleocr import PPStructure
+            
+            table_model_dir = kwargs.get('table_model_dir', self.table_model_dir)
+            
+            init_params = {}
+            if self.use_gpu:
+                init_params['use_gpu'] = self.use_gpu
+            if table_model_dir:
+                init_params['table_model_dir'] = table_model_dir
+            
+            self._structure_engine = PPStructure(**init_params)
+            self._is_ppstructure_v3 = False
+            
+            self._structure_initialized = True
+            self.logger.info("PaddleOCR PP-Structure engine initialized (legacy version)")
+            return True
+            
+        except ImportError as e:
+            self.logger.error(f"Failed to import PPStructure: {e}")
+            self.logger.error("Please ensure paddleocr is installed: pip install paddleocr")
+            return False
+        except Exception as e:
+            self.logger.error(f"Failed to load PP-Structure models (legacy): {e}")
+            import traceback
+            self.logger.debug(traceback.format_exc())
+            return False
     
     def recognize_text(self, image: Image.Image, **kwargs) -> List[Dict]:
         """

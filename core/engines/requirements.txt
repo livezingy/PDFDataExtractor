@@ -4,8 +4,8 @@
 easyocr>=1.7.0
 
 # PaddleOCR引擎依赖
-paddleocr>=2.7.0
-paddlepaddle>=2.5.0
+paddleocr==2.7.0
+paddlepaddle==2.5.2
 
 # Transformer引擎依赖
 torch>=2.0.0
