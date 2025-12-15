@@ -605,12 +605,28 @@ def _process_image_with_paddleocr(image, params: Dict[str, Any], results: Dict[s
     try:
         from core.engines.factory import EngineFactory
         
-        results['detection_steps'].append({
-            'step': 3,
-            'name': 'PaddleOCR Initialization',
-            'status': 'info',
-            'message': 'Initializing PaddleOCR engine... This may take 2-5 minutes on first use as models are being downloaded. Please be patient.'
-        })
+        # 检查模型是否已预加载
+        models_ready = False
+        try:
+            from core.utils.paddleocr_model_preloader import check_paddleocr_models_exist
+            models_ready = check_paddleocr_models_exist()
+        except ImportError:
+            pass
+        
+        if models_ready:
+            results['detection_steps'].append({
+                'step': 3,
+                'name': 'PaddleOCR Initialization',
+                'status': 'info',
+                'message': 'Initializing PaddleOCR engine... Models are ready.'
+            })
+        else:
+            results['detection_steps'].append({
+                'step': 3,
+                'name': 'PaddleOCR Initialization',
+                'status': 'info',
+                'message': 'Initializing PaddleOCR engine... This may take 2-5 minutes on first use as models are being downloaded. Please be patient.'
+            })
         
         # 创建PaddleOCR检测引擎
         detection_engine = EngineFactory.create_detection('paddleocr', use_gpu=False)

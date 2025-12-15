@@ -37,6 +37,16 @@ from streamlit_app.streamlit_utils import (
     MAX_FILE_SIZE
 )
 
+# 导入PaddleOCR模型预加载器
+try:
+    from core.utils.paddleocr_model_preloader import (
+        preload_paddleocr_models,
+        check_paddleocr_models_exist
+    )
+    PADDLEOCR_PRELOADER_AVAILABLE = True
+except ImportError:
+    PADDLEOCR_PRELOADER_AVAILABLE = False
+
 # Set page configuration
 st.set_page_config(
     page_title="PDF Table Extractor",
@@ -212,6 +222,25 @@ def main():
             'temp_file_path': None,
             'extraction_params': {}
         }
+    
+    # 预加载PaddleOCR模型（如果可用且未加载）
+    if PADDLEOCR_PRELOADER_AVAILABLE:
+        if 'paddleocr_preload_checked' not in st.session_state:
+            st.session_state.paddleocr_preload_checked = True
+            # 检查模型是否已存在
+            models_exist = check_paddleocr_models_exist()
+            if not models_exist:
+                # 在后台预加载模型
+                preload_paddleocr_models(background=True)
+                # 显示提示信息（只在首次检查时显示）
+                st.info("""
+                💡 **PaddleOCR模型预加载中**
+                
+                首次使用PaddleOCR时，系统正在后台预下载模型文件（200-500MB），这可能需要2-5分钟。
+                模型下载完成后，后续使用将更快。请稍候...
+                
+                您可以在模型下载期间使用其他提取方法（PDFPlumber或Camelot）。
+                """)
     
     # Render sidebar
     sidebar_config = render_sidebar()
