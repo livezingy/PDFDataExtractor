@@ -15,9 +15,11 @@ camelot-py>=0.11.0
 # PPStructureV3 需要 paddleocr[doc-parser] 依赖，paddleocr[all] 已包含所有功能
 # PP-StructureV3 还需要 paddlex[ocr] 额外依赖才能正常工作
 # 版本要求：PaddleOCR 3.0+ 与 PaddlePaddle 3.0+ 必须匹配
+# PaddleOCR 3.3.2 需要 PaddleX 3.3.x 版本（3.3.0 <= version < 3.4.0）
+# 注意：paddlex[ocr] 会自动安装基础 paddlex 包及其 OCR 扩展依赖
 paddleocr[all]>=3.0.0
 paddlepaddle>=3.0.0
-paddlex[ocr]>=3.0.0
+paddlex[ocr]>=3.3.0
 
 # 数据处理
 pandas>=2.0.0
