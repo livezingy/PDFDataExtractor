@@ -603,7 +603,8 @@ def _process_image_with_paddleocr(image, params: Dict[str, Any], results: Dict[s
         List[Dict]: 提取的表格列表
     """
     try:
-        from core.engines.factory import EngineFactory
+        # 通过 core.engines 导入，确保延迟注册逻辑运行（注册 paddleocr 引擎）
+        from core.engines import EngineFactory
         
         # 检查模型是否已预加载
         models_ready = False
