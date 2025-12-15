@@ -11,11 +11,11 @@ PyMuPDF>=1.23.0
 camelot-py>=0.11.0
 
 # PaddleOCR（推荐用于图像处理）
-# 注意：PaddleOCR 3.x 需要 PaddlePaddle 3.0+ 和 paddlex[ocr] 依赖
-paddleocr>=2.7.0
+# 注意：PaddleOCR 3.x 需要 PaddlePaddle 3.0+ 才能正常工作
+# PPStructureV3 需要 paddleocr[doc-parser] 依赖，paddleocr[all] 已包含所有功能
+# 版本要求：PaddleOCR 3.0+ 与 PaddlePaddle 3.0+ 必须匹配
+paddleocr[all]>=3.0.0
 paddlepaddle>=3.0.0
-# PPStructureV3 需要 paddlex[ocr] 额外依赖
-paddlex[ocr]
 
 # 数据处理
 pandas>=2.0.0
