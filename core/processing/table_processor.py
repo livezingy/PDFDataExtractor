@@ -541,6 +541,8 @@ class TableProcessor:
         import os
         os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
         os.environ.setdefault('DISPLAY', '')
+        os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
+        os.environ.setdefault('MESA_GL_VERSION_OVERRIDE', '3.3')
         
         try:
             import camelot
@@ -548,8 +550,18 @@ class TableProcessor:
             self.logger.error(f"Failed to import camelot: {e}. Camelot may not be available in this environment.")
             return []
         except Exception as e:
-            self.logger.error(f"Unexpected error importing camelot: {e}")
-            return []
+            # libGL.so.1错误通常是警告性的，camelot在headless模式下仍可使用
+            error_str = str(e).lower()
+            if 'libgl' in error_str or 'opengl' in error_str or 'libgl.so' in error_str:
+                self.logger.warning(f"Camelot import warning (libGL/OpenGL): {e}. Attempting to continue...")
+                try:
+                    import camelot
+                except:
+                    self.logger.error(f"Camelot import failed after retry: {e}")
+                    return []
+            else:
+                self.logger.error(f"Unexpected error importing camelot: {e}")
+                return []
         
         evaluator = TableEvaluator()
         evaluator.source = "camelot"
@@ -614,6 +626,8 @@ class TableProcessor:
         import os
         os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
         os.environ.setdefault('DISPLAY', '')
+        os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
+        os.environ.setdefault('MESA_GL_VERSION_OVERRIDE', '3.3')
         
         try:
             import camelot
@@ -621,8 +635,18 @@ class TableProcessor:
             self.logger.error(f"Failed to import camelot: {e}. Camelot may not be available in this environment.")
             return []
         except Exception as e:
-            self.logger.error(f"Unexpected error importing camelot: {e}")
-            return []
+            # libGL.so.1错误通常是警告性的，camelot在headless模式下仍可使用
+            error_str = str(e).lower()
+            if 'libgl' in error_str or 'opengl' in error_str or 'libgl.so' in error_str:
+                self.logger.warning(f"Camelot import warning (libGL/OpenGL): {e}. Attempting to continue...")
+                try:
+                    import camelot
+                except:
+                    self.logger.error(f"Camelot import failed after retry: {e}")
+                    return []
+            else:
+                self.logger.error(f"Unexpected error importing camelot: {e}")
+                return []
         
         evaluator = TableEvaluator()
         evaluator.source = "camelot"

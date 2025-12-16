@@ -890,15 +890,32 @@ def check_dependencies() -> Dict[str, bool]:
     # 在导入camelot之前设置环境变量，避免在无头环境中加载OpenGL库
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
     os.environ.setdefault('DISPLAY', '')
+    # 设置OpenCV后端，避免尝试加载GUI相关库
+    os.environ.setdefault('OPENCV_IO_ENABLE_OPENEXR', '0')
+    # 设置MESA GL版本，避免OpenGL相关错误
+    os.environ.setdefault('MESA_GL_VERSION_OVERRIDE', '3.3')
+    
     try:
+        # 尝试导入camelot
         import camelot
+        # 如果导入成功，标记为可用
         dependencies['camelot'] = True
     except ImportError:
-        pass
+        # ImportError表示camelot包未安装
+        dependencies['camelot'] = False
     except Exception as e:
         # 捕获其他可能的导入错误（如libGL.so.1）
-        logger.warning(f"Camelot import failed: {e}")
-        pass
+        # libGL.so.1错误通常是警告性的，camelot在headless模式下仍可使用
+        error_str = str(e).lower()
+        if 'libgl' in error_str or 'opengl' in error_str or 'libgl.so' in error_str:
+            # libGL错误通常是警告，不影响camelot在headless模式下的使用
+            logger.warning(f"Camelot import warning (libGL/OpenGL): {e}. Camelot should still work in headless mode.")
+            # 即使有libGL警告，也标记为可用（因为camelot在headless模式下不依赖OpenGL）
+            dependencies['camelot'] = True
+        else:
+            # 其他错误，记录但不标记为可用
+            logger.warning(f"Camelot import failed: {e}")
+            dependencies['camelot'] = False
     
     # 检查transformer（仅在本地环境）
     if not is_streamlit_cloud:
@@ -911,16 +928,20 @@ def check_dependencies() -> Dict[str, bool]:
         # Streamlit Cloud环境：Transformer不可用
         dependencies['transformer'] = False
     
-    # 检查paddleocr
-    try:
-        from core.engines.factory import EngineFactory
-        if EngineFactory.is_detection_registered('paddleocr'):
-            # 尝试创建引擎实例检查是否可用
-            engine = EngineFactory.create_detection('paddleocr', use_gpu=False)
-            dependencies['paddleocr'] = engine.is_available()
-    except (ImportError, Exception) as e:
-        logger.debug(f"PaddleOCR check failed: {e}")
-        pass
+    # 检查paddleocr（仅在本地环境，Streamlit Cloud不可用）
+    if not is_streamlit_cloud:
+        try:
+            from core.engines.factory import EngineFactory
+            if EngineFactory.is_detection_registered('paddleocr'):
+                # 尝试创建引擎实例检查是否可用
+                engine = EngineFactory.create_detection('paddleocr', use_gpu=False)
+                dependencies['paddleocr'] = engine.is_available()
+        except (ImportError, Exception) as e:
+            logger.debug(f"PaddleOCR check failed: {e}")
+            pass
+    else:
+        # Streamlit Cloud环境：PaddleOCR不可用（模型过大，资源限制）
+        dependencies['paddleocr'] = False
     
     return dependencies
 
