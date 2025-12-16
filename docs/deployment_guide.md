@@ -4,20 +4,27 @@
 
 ## 快速选择
 
-- **一键试用（推荐）**：使用 [Streamlit Cloud部署](streamlit_cloud_deployment.md) - 支持PDFPlumber、Camelot、PaddleOCR
-- **完整功能**：本地部署 - 支持所有功能包括Transformer
+- **一键试用（推荐）**：使用 [Streamlit Cloud部署](streamlit_cloud_deployment.md) - 支持PDFPlumber、Camelot
+  - ⚠️ **PaddleOCR+PP-Structure 和 Transformer 需要在本地/服务器部署**（模型过大，Streamlit Cloud资源限制）
+- **完整功能**：本地/服务器部署 - 支持所有功能包括PaddleOCR+PP-Structure、Transformer
 - **生产环境**：服务器部署 - 高性能、可扩展
 
 ## 部署方式
 
 ### 1. Streamlit Cloud部署（一键试用）⭐
 
-**推荐用于快速试用和演示**
+**推荐用于快速试用和演示（PDF表格提取）**
 
 - ✅ 免费
 - ✅ 一键部署
-- ✅ 支持PDFPlumber、Camelot、PaddleOCR
+- ✅ 支持PDFPlumber、Camelot（PDF表格提取）
+- ❌ **不支持PaddleOCR+PP-Structure**（模型过大，需要本地/服务器部署）
 - ❌ 不支持Transformer（资源限制）
+
+**重要说明**：
+- Streamlit Cloud对运行时间和内存有严格限制
+- PaddleOCR 3.x + PP-StructureV3 + PaddleX需要下载和加载多个大模型（200-500MB+），在云端环境下会频繁超时或失败
+- **图像表格检测功能（PaddleOCR/Transformer）需要在本地或服务器部署才能使用**
 
 详细步骤请参考 [Streamlit Cloud部署指南](streamlit_cloud_deployment.md)
 
@@ -204,7 +211,10 @@ docker-compose up -d
    - Python version: 3.10
 5. 点击"Deploy"
 
-**注意**：Streamlit Cloud有资源限制，大型模型可能无法运行。
+**重要说明**：
+- Streamlit Cloud有资源限制，大型模型无法运行
+- **PaddleOCR+PP-Structure 和 Transformer 图像表格检测功能需要在本地/服务器部署**
+- 云端环境仅适合使用PDFPlumber和Camelot进行PDF表格提取
 
 ## 环境配置
 

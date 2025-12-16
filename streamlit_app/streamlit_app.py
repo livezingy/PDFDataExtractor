@@ -262,6 +262,12 @@ def main():
             # Get configuration
             method = sidebar_config.get('method', 'PDFPlumber')
             flavor = sidebar_config.get('flavor', 'auto')
+            
+            # 检查在Streamlit Cloud环境下是否尝试处理图像文件
+            is_image = uploaded_file.type.startswith('image/') if uploaded_file else False
+            if is_image and method is None:
+                st.error("❌ **图像表格检测功能在 Streamlit Cloud 上不可用**。请在本地或服务器部署以使用 PaddleOCR+PP-Structure 或 Transformer。")
+                st.stop()
             # Use default score threshold (0.6)
             score_threshold = 0.6
             

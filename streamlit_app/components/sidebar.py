@@ -58,23 +58,30 @@ def render_sidebar() -> dict:
             
             # 图像文件：选择检测引擎
             if is_streamlit_cloud:
-                # Streamlit Cloud环境：仅提供PaddleOCR
-                method = "PaddleOCR"
-                st.info("🌐 **Streamlit Cloud**: PaddleOCR is available for online use. Transformer is only available in local deployment.")
-                st.warning("""
-                ⚠️ **First-time Use Notice**: 
+                # Streamlit Cloud环境：不支持图像表格检测（PaddleOCR/Transformer模型过大）
+                st.error("""
+                ❌ **Streamlit Cloud 限制**：
                 
-                On first use, PaddleOCR will download model files (200-500MB), which may take **2-5 minutes**. 
-                Please be patient and do not close the page. 
+                **图像表格检测功能（PaddleOCR+PP-Structure / Transformer）在 Streamlit Cloud 上不可用**。
                 
-                If you encounter a timeout error, please wait a few minutes and try again.
+                原因：
+                - PaddleOCR+PP-Structure 需要下载多个大模型（200-500MB+）
+                - Streamlit Cloud 有严格的运行时间和内存限制
+                - 模型下载和加载会频繁超时或失败
+                
+                **解决方案**：
+                - 对于图像文件，请在**本地或服务器部署**以使用 PaddleOCR+PP-Structure 或 Transformer
+                - 对于 PDF 文件，可以使用 PDFPlumber 或 Camelot（在云端可用）
                 """)
                 st.markdown("""
                 <div style='background-color: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
-                    <strong>💡 Local Deployment:</strong> For Transformer support, please deploy locally. 
-                    See <a href='https://github.com/livezingy/PDFDataExtractor/blob/main/docs/deployment_guide.md' target='_blank'>Deployment Guide</a> for details.
+                    <strong>💡 本地部署指南:</strong> 要使用图像表格检测功能，请参考 
+                    <a href='https://github.com/livezingy/PDFDataExtractor/blob/main/docs/deployment_guide.md' target='_blank'>部署指南</a> 
+                    在本地或服务器部署。
                 </div>
                 """, unsafe_allow_html=True)
+                # 不设置method，让用户知道图像处理在云端不可用
+                method = None
             else:
                 # 本地环境：提供两个选项
                 method = st.selectbox(

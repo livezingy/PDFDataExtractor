@@ -6,20 +6,29 @@
 
 ## 方式选择
 
-### 方式1：Streamlit Cloud一键试用（推荐）⭐
+### 方式1：Streamlit Cloud一键试用（推荐用于PDF表格提取）⭐
 
 **无需安装，直接在浏览器中使用**
 
 1. 访问项目的Streamlit Cloud部署（如果已部署）
 2. 或参考 [Streamlit Cloud部署指南](streamlit_cloud_deployment.md) 自行部署
-3. 支持功能：PDFPlumber、Camelot、PaddleOCR
+3. 支持功能：
+   - ✅ PDFPlumber（PDF表格提取）
+   - ✅ Camelot（PDF表格提取）
+   - ❌ **PaddleOCR+PP-Structure**：需要在本地/服务器部署（模型过大，Streamlit Cloud资源限制）
+   - ❌ Transformer：需要在本地/服务器部署（资源限制）
 
-**优点**：无需安装，快速试用  
-**限制**：不支持Transformer功能
+**优点**：无需安装，快速试用PDF表格提取  
+**限制**：
+- 仅支持PDF表格提取（PDFPlumber/Camelot）
+- **图像表格检测功能（PaddleOCR/Transformer）需要在本地/服务器部署**
 
-### 方式2：本地安装（完整功能）
+### 方式2：本地/服务器安装（完整功能）⭐
 
-**支持所有功能，包括Transformer**
+**支持所有功能，包括**：
+- ✅ PDFPlumber、Camelot（PDF表格提取）
+- ✅ PaddleOCR+PP-Structure（图像表格检测和结构识别）
+- ✅ Transformer（图像表格检测和结构识别）
 
 ## 前置要求
 
@@ -77,8 +86,12 @@ streamlit run streamlit_app/streamlit_app.py
 
 ### 4.2 在界面中操作
 
+**注意**：图像表格检测功能需要在**本地或服务器部署**，Streamlit Cloud不支持。
+
 1. **上传文件**：选择图像文件
-2. **选择引擎**：选择"Detection Engine"（推荐使用PaddleOCR）
+2. **选择引擎**：选择"Detection Engine"
+   - **PaddleOCR**（推荐）：适合中文文档，支持表格检测和结构识别
+   - **Transformer**：适合复杂表格和英文文档
 3. **开始提取**：点击"🚀 Start Extraction"按钮
 4. **查看结果**：查看检测和识别的表格
 

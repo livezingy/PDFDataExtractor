@@ -13,11 +13,16 @@
 
 详细步骤请参考 [Streamlit Cloud部署指南](streamlit_cloud_deployment.md)
 
-**可用功能**：
-- ✅ PDFPlumber
-- ✅ Camelot  
-- ✅ PaddleOCR
-- ❌ Transformer（仅本地部署）
+**可用功能（Streamlit Cloud）**：
+- ✅ PDFPlumber（PDF表格提取）
+- ✅ Camelot（PDF表格提取）
+- ❌ **PaddleOCR+PP-Structure**：需要在本地/服务器部署（模型过大，Streamlit Cloud资源限制）
+- ❌ Transformer：需要在本地/服务器部署（资源限制）
+
+**完整功能（本地/服务器部署）**：
+- ✅ PDFPlumber、Camelot
+- ✅ PaddleOCR+PP-Structure（图像表格检测和结构识别）
+- ✅ Transformer（图像表格检测和结构识别）
 
 ## 安装问题
 
@@ -121,21 +126,25 @@ huggingface-cli download microsoft/table-transformer-structure-recognition
 
 **A**: 选择建议：
 
-- **Streamlit Cloud环境** → PaddleOCR（唯一可用）
-- **中文文档** → PaddleOCR（推荐）
-- **英文文档** → PaddleOCR 或 Transformer（本地）
-- **复杂表格** → Transformer（仅本地）
-- **需要快速处理** → PaddleOCR
+- **Streamlit Cloud环境** → ❌ **图像表格检测功能不可用**（需要在本地/服务器部署）
+- **本地/服务器部署**：
+  - **中文文档** → PaddleOCR+PP-Structure（推荐）
+  - **英文文档/复杂表格** → Transformer 或 PaddleOCR+PP-Structure
+  - **需要快速处理** → PaddleOCR+PP-Structure
 
 **对比**：
-| 特性 | PaddleOCR | Transformer |
-|------|-----------|-------------|
+| 特性 | PaddleOCR+PP-Structure | Transformer |
+|------|------------------------|-------------|
 | 中文识别 | ✅ 优秀 | ❌ 不支持 |
 | 处理速度 | ✅ 快 | ❌ 慢 |
 | 复杂表格 | ✅ 良好 | ✅ 优秀 |
-| 模型大小 | ✅ 较小 | ❌ 较大 |
-| Streamlit Cloud | ✅ 可用 | ❌ 不可用 |
-| 本地部署 | ✅ 可用 | ✅ 可用 |
+| 模型大小 | ❌ 较大（200-500MB+） | ❌ 较大 |
+| Streamlit Cloud | ❌ **不可用**（需本地/服务器） | ❌ 不可用（需本地/服务器） |
+| 本地/服务器部署 | ✅ 推荐 | ✅ 推荐 |
+
+**重要说明**：
+- PaddleOCR+PP-Structure 需要下载多个大模型（PP-StructureV3、PaddleX等），在Streamlit Cloud环境下会频繁超时
+- **图像表格检测功能必须在本地或服务器部署才能使用**
 
 ### Q7: 提取结果为空怎么办？
 
